@@ -1,5 +1,7 @@
 pub mod tokenizer {
-    enum ShellTokens {
+    use std::collections::{ HashMap, HashSet };
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    pub enum ShTokenType {
         NewLine,
         WhiteSpace,
         EndOfFile,      // EOF
@@ -22,6 +24,13 @@ pub mod tokenizer {
         Pound,          // #
         QuestionMark,   // ?
         Tilde,          // ~
+        Pipe,           // |
+        Control,        // &
+        RedirectOut,    // >
+        RedirectIn,     // < 
+        AppendOut,      // >>
+        AndIf,          // &&
+        OrIf,           // ||
         Case,
         Do,
         Done,
@@ -38,22 +47,167 @@ pub mod tokenizer {
         Function,
         NameSpace,
         Select,
-        Time
+        Time,
+        Name
     }
-    pub fn tokens(st: String) -> Vec<String> {
-        let mut lexemes = Vec::new(); 
+
+    #[derive(Clone, Debug)]
+    pub struct Token{
+        pub lexeme: String,
+        pub token_type: ShTokenType 
+    }
+
+    pub fn is_delemiter(c: char) -> bool {
+        let delimeter_set = HashSet::from([
+            ' ', '\t', '$', '\\', '\'', '(', ')', '{', '}', '[', ']',
+            '!', '@', '*', '#', '?', '~', '|', '>', '<', '`', '"', '&'
+        ]);
+        delimeter_set.contains(&c)
+    }
+
+    pub fn tokens(st: String) -> Vec<Token> {
+        let mut tokens: Vec<Token> = Vec::new();
         let mut current = String::new();
-        for c in st.chars() {
-            if c.is_whitespace() {
-                lexemes.push(current);
-                current = "".to_string();
-                continue;
+        let token_map: HashMap<&str, ShTokenType> = HashMap::from([
+            ("case",      ShTokenType::Case),
+            ("do",        ShTokenType::Do),
+            ("done",      ShTokenType::Done),
+            ("elif",      ShTokenType::Elif),
+            ("else",      ShTokenType::Else),
+            ("esac",      ShTokenType::Esac),
+            ("fi",        ShTokenType::Fi),
+            ("for",       ShTokenType::For),
+            ("if",        ShTokenType::If),
+            ("in",        ShTokenType::In),
+            ("then",      ShTokenType::Then),
+            ("until",     ShTokenType::Until),
+            ("while",     ShTokenType::While),
+            ("function",  ShTokenType::Function),
+            ("namespace", ShTokenType::NameSpace),
+            ("select",    ShTokenType::Select),
+            ("time",      ShTokenType::Time)
+        ]);         
+
+        let match_token = |current: String| -> Token {
+            match token_map.get(&current.as_str()) {
+                Some(&toke_type) => Token {
+                    lexeme: current.clone(), 
+                    token_type: toke_type
+                },
+                None => Token { 
+                    lexeme: current.clone(), 
+                    token_type: ShTokenType::Name
+                }
             }
-            current.push(c);
+        };
+        let mut it = st.chars().peekable();
+        while let Some(c) = it.next() {
+            let token = match c {
+            '\n' => Token { lexeme: String::from(c), token_type: ShTokenType::NewLine },
+            ' '  => Token { lexeme: String::from(c), token_type: ShTokenType::WhiteSpace },
+            '\\' => Token { lexeme: String::from(c), token_type: ShTokenType::BackSlash },
+            '$'  => Token { lexeme: String::from(c), token_type: ShTokenType::DollarSign },
+            '`'  => Token { lexeme: String::from(c), token_type: ShTokenType::BackTick },
+            '"'  => Token { lexeme: String::from(c), token_type: ShTokenType::DoubleQuote },
+            '\'' => Token { lexeme: String::from(c), token_type: ShTokenType::SingleQuote },
+            '('  => Token { lexeme: String::from(c), token_type: ShTokenType::LeftParen },
+            ')'  => Token { lexeme: String::from(c), token_type: ShTokenType::RightParen },
+            '{'  => Token { lexeme: String::from(c), token_type: ShTokenType::LeftBrace },
+            '}'  => Token { lexeme: String::from(c), token_type: ShTokenType::RightBrace },
+            '!'  => Token { lexeme: String::from(c), token_type: ShTokenType::Bang },
+            '@'  => Token { lexeme: String::from(c), token_type: ShTokenType::AtSign },
+            '*'  => Token { lexeme: String::from(c), token_type: ShTokenType::Star },
+            '#'  => Token { lexeme: String::from(c), token_type: ShTokenType::Pound },
+            '?'  => Token { lexeme: String::from(c), token_type: ShTokenType::QuestionMark },
+            '~'  => Token { lexeme: String::from(c), token_type: ShTokenType::Tilde },
+            '['  => {
+                let tok: Token;
+                if it.peek().is_some() && *it.peek().expect("No char?") == '[' {
+                    tok = Token {
+                        lexeme: String::from("[["),
+                        token_type: ShTokenType::DoubleLeftBracket
+                    };
+                    it.next();
+                } else {
+                    tok = Token { lexeme: String::from(c), token_type: ShTokenType::LeftBracket };
+                }
+                tok
+            },
+            ']'  => {
+                let tok: Token;
+                if it.peek().is_some() && *it.peek().expect("No Char?") == ']' {
+                    tok = Token {
+                        lexeme: String::from("]]"),
+                        token_type: ShTokenType::DoubleRightBracket
+                    };
+                    it.next();
+                } else {
+                    tok = Token { lexeme: String::from(c), token_type: ShTokenType::RightBracket }
+                }
+                tok
+            },
+            '&'  => {
+                let tok: Token;
+                if it.peek().is_some() && *it.peek().unwrap() == '&' {
+                    tok = Token {
+                        lexeme: String::from("&&"),
+                        token_type: ShTokenType::AndIf
+                    };
+                    it.next();
+                } else {
+                   tok = Token { lexeme: String::from(c), token_type: ShTokenType::Control}
+                }
+                tok
+            },
+            '|'  => {
+                let tok: Token;
+                if it.peek().is_some() && *it.peek().unwrap() == '|' {
+                    tok = Token {
+                        lexeme: String::from("||"),
+                        token_type: ShTokenType::OrIf
+                    };
+                    it.next();
+                } else {
+                   tok = Token { lexeme: String::from(c), token_type: ShTokenType::Pipe}
+                }
+                tok
+            },
+            '>'  => {
+                let tok: Token;
+                if it.peek().is_some() && *it.peek().unwrap() == '>' {
+                    tok = Token {
+                        lexeme: String::from(">>"),
+                        token_type: ShTokenType::AppendOut
+                    };
+                    it.next();
+                } else {
+                    tok = Token { lexeme: String::from(c), token_type: ShTokenType::RedirectOut}
+                }
+                tok
+            },
+            '<'  => Token { lexeme: String::from(c), token_type: ShTokenType::RedirectIn },    
+            _ => { 
+                current = String::from(c);
+                while let Some(cc) = it.peek() {
+                    if !cc.is_whitespace() && !is_delemiter(*cc) {
+                        current.push(*cc);
+                        it.next();
+                    } else {
+                        break;
+                    }
+                }
+                match_token(current)
+            }
+            };
+            tokens.push(token);
+
         }
-        if current.len() > 0 {
-            lexemes.push(current);
+
+        for x in &tokens {
+            println!("{:?}", x);
         }
-        lexemes
+        tokens    
     }
+
+    
 }

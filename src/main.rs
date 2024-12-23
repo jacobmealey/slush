@@ -4,6 +4,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 use crate::parser::tokenizer::tokenizer;
+use crate::tokenizer::ShTokenType;
 mod parser;
 
 fn repl() {
@@ -14,9 +15,11 @@ fn repl() {
         stdout.flush().expect("Error flushing to stdout");
         let line = stdin.lock().lines().next().unwrap().unwrap();
         let cmd =tokenizer::tokens(line);
-        let mut command = Command::new(cmd[0].clone());
+        let mut command = Command::new(cmd[0].lexeme.clone());
         for arg in &cmd[1..] {
-            command.arg(arg.clone());
+            if arg.token_type == ShTokenType::Name {
+                command.arg(arg.lexeme.clone());
+            }
         }
         //let output = command.output().expect("Error processing command {cmd[0]}");
         let output = match command.output() {
@@ -29,6 +32,5 @@ fn repl() {
 
 fn main() {
     println!("Hello, world!");
-    tokenizer::tokens("poop".to_string());
     repl();
 }
