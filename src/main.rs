@@ -5,7 +5,9 @@ use std::process::{Command, Stdio};
 
 use crate::parser::tokenizer::tokenizer;
 use crate::tokenizer::ShTokenType;
+use crate::runtime::runtime::Environment;
 mod parser;
+mod runtime;
 
 fn repl() {
     let stdin = io::stdin();
@@ -21,6 +23,7 @@ fn repl() {
                 command.arg(arg.lexeme.clone());
             }
         }
+        let _env = Environment::new();
         //let output = command.output().expect("Error processing command {cmd[0]}");
         let output = match command.output() {
             Ok(out) => String::from_utf8(out.stdout).expect("Couldn't parse output"),

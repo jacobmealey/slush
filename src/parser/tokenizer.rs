@@ -67,7 +67,7 @@ pub mod tokenizer {
 
     pub fn tokens(st: String) -> Vec<Token> {
         let mut tokens: Vec<Token> = Vec::new();
-        let mut current = String::new();
+        let mut current;
         let token_map: HashMap<&str, ShTokenType> = HashMap::from([
             ("case",      ShTokenType::Case),
             ("do",        ShTokenType::Do),
