@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 
 use crate::parser::tokenizer::tokenizer;
 use crate::tokenizer::ShTokenType;
-use crate::runtime::runtime::Environment;
+use crate::parser::Evalable;
 mod parser;
 mod runtime;
 
@@ -16,20 +16,10 @@ fn repl() {
         print!("$ ");
         stdout.flush().expect("Error flushing to stdout");
         let line = stdin.lock().lines().next().unwrap().unwrap();
-        let cmd =tokenizer::tokens(line);
-        let mut command = Command::new(cmd[0].lexeme.clone());
-        for arg in &cmd[1..] {
-            if arg.token_type == ShTokenType::Name {
-                command.arg(arg.lexeme.clone());
-            }
-        }
-        let _env = Environment::new();
-        //let output = command.output().expect("Error processing command {cmd[0]}");
-        let output = match command.output() {
-            Ok(out) => String::from_utf8(out.stdout).expect("Couldn't parse output"),
-            Err(err) => format!("{}\n", err.to_string())
-        };
-        print!("{}", output);
+        let cmd =tokenizer::tokens(&line);
+        let mut parser = parser::Parser::new(&line);
+        let mut expr = parser.parse();
+        expr.eval();
     }
 }
 

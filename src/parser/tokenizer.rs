@@ -65,7 +65,7 @@ pub mod tokenizer {
         delimeter_set.contains(&c)
     }
 
-    pub fn tokens(st: String) -> Vec<Token> {
+    pub fn tokens(st: &String) -> Vec<Token> {
         let mut tokens: Vec<Token> = Vec::new();
         let mut current;
         let token_map: HashMap<&str, ShTokenType> = HashMap::from([
@@ -202,10 +202,7 @@ pub mod tokenizer {
             tokens.push(token);
 
         }
-
-        for x in &tokens {
-            println!("{:?}", x);
-        }
+        println!("{:?}", tokens);
         tokens    
     }
 
