@@ -6,7 +6,7 @@ use crate::tokenizer::{
 };
 use std::process;
 use std::process::Command;
-use std::process::Stdio;
+// use std::process::Stdio;
 
 pub trait Evalable {
     // evaluate SOME command and provide a return value (0 is success, etc.) 
@@ -34,7 +34,7 @@ impl Evalable for Expr {
 impl Evalable for CommandExpr {
     fn eval(&mut self) -> i32 {
         let mut code: i32 = 0; 
-        let mut child = match self.command.spawn() {
+        let child = match self.command.spawn() {
             Ok(c) => c,
             Err(v) => { println!("{}", v); return 2;} 
         };
@@ -71,7 +71,7 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(line: &String) -> Parser {
+    pub fn new(line: &str) -> Parser {
         let mut parser = Parser {
             token: tokens(line),
             current: Token { lexeme: "".to_string(), token_type: ShTokenType::EndOfFile},
@@ -100,7 +100,7 @@ impl Parser {
              }));
         }
         Ok(PipeLineExpr {
-            pipeline: pipeline
+            pipeline
         })
     }
 
@@ -119,7 +119,7 @@ impl Parser {
         }
 
         Ok(CommandExpr {
-            command: command
+            command
         })
     }
     
@@ -130,7 +130,8 @@ impl Parser {
     }
 
     fn next_token(&mut self) {
-        // this seems really wasteful but the borrow checker beat me up
+        // this seems really wasteful but the borrow checker beat me up -- how do we change current 
+        // and prev to be references?
         println!("{:?}", self.current);
         self.loc += 1;
         if self.loc >= self.token.len() {

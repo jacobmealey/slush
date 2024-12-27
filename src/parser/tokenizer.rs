@@ -1,108 +1,107 @@
-pub mod tokenizer {
-    use std::collections::{ HashMap, HashSet };
-    #[derive(Clone, Copy, Debug, PartialEq)]
-    pub enum ShTokenType {
-        NewLine,
-        WhiteSpace,
-        EndOfFile,      // EOF
-        BackSlash,      // \
-        DollarSign,     // $
-        BackTick,       // `
-        DoubleQuote,    // "
-        SingleQuote,    // '
-        LeftParen,      // (
-        RightParen,     // )
-        LeftBracket,    // [
-        RightBracket,   // ]
-        DoubleLeftBracket,    // [[
-        DoubleRightBracket,   // ]]
-        LeftBrace,      // {
-        RightBrace,     // }
-        Bang,           // !
-        AtSign,         // @
-        Star,           // *
-        Pound,          // #
-        QuestionMark,   // ?
-        Tilde,          // ~
-        Pipe,           // |
-        Control,        // &
-        RedirectOut,    // >
-        RedirectIn,     // < 
-        AppendOut,      // >>
-        AndIf,          // &&
-        OrIf,           // ||
-        Case,
-        Do,
-        Done,
-        Elif,
-        Else,
-        Esac,
-        Fi,
-        For,
-        If,
-        In,
-        Then,
-        Until,
-        While,
-        Function,
-        NameSpace,
-        Select,
-        Time,
-        Name
-    }
+use std::collections::{ HashMap, HashSet };
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ShTokenType {
+    NewLine,
+    WhiteSpace,
+    EndOfFile,      // EOF
+    BackSlash,      // \
+    DollarSign,     // $
+    BackTick,       // `
+    DoubleQuote,    // "
+    SingleQuote,    // '
+    LeftParen,      // (
+    RightParen,     // )
+    LeftBracket,    // [
+    RightBracket,   // ]
+    DoubleLeftBracket,    // [[
+    DoubleRightBracket,   // ]]
+    LeftBrace,      // {
+    RightBrace,     // }
+    Bang,           // !
+    AtSign,         // @
+    Star,           // *
+    Pound,          // #
+    QuestionMark,   // ?
+    Tilde,          // ~
+    Pipe,           // |
+    Control,        // &
+    RedirectOut,    // >
+    RedirectIn,     // < 
+    AppendOut,      // >>
+    AndIf,          // &&
+    OrIf,           // ||
+    Case,
+    Do,
+    Done,
+    Elif,
+    Else,
+    Esac,
+    Fi,
+    For,
+    If,
+    In,
+    Then,
+    Until,
+    While,
+    Function,
+    NameSpace,
+    Select,
+    Time,
+    Name
+}
 
-    #[derive(Clone, Debug)]
-    pub struct Token{
-        pub lexeme: String,
-        pub token_type: ShTokenType 
-    }
+#[derive(Clone, Debug)]
+pub struct Token{
+    pub lexeme: String,
+    pub token_type: ShTokenType 
+}
 
-    pub fn is_delemiter(c: char) -> bool {
-        let delimeter_set = HashSet::from([
-            ' ', '\t', '$', '\\', '\'', '(', ')', '{', '}', '[', ']',
-            '!', '@', '*', '#', '?', '~', '|', '>', '<', '`', '"', '&'
-        ]);
-        delimeter_set.contains(&c)
-    }
+pub fn is_delemiter(c: char) -> bool {
+    let delimeter_set = HashSet::from([
+        ' ', '\t', '$', '\\', '\'', '(', ')', '{', '}', '[', ']',
+        '!', '@', '*', '#', '?', '~', '|', '>', '<', '`', '"', '&'
+    ]);
+    delimeter_set.contains(&c)
+}
 
-    pub fn tokens(st: &String) -> Vec<Token> {
-        let mut tokens: Vec<Token> = Vec::new();
-        let mut current;
-        let token_map: HashMap<&str, ShTokenType> = HashMap::from([
-            ("case",      ShTokenType::Case),
-            ("do",        ShTokenType::Do),
-            ("done",      ShTokenType::Done),
-            ("elif",      ShTokenType::Elif),
-            ("else",      ShTokenType::Else),
-            ("esac",      ShTokenType::Esac),
-            ("fi",        ShTokenType::Fi),
-            ("for",       ShTokenType::For),
-            ("if",        ShTokenType::If),
-            ("in",        ShTokenType::In),
-            ("then",      ShTokenType::Then),
-            ("until",     ShTokenType::Until),
-            ("while",     ShTokenType::While),
-            ("function",  ShTokenType::Function),
-            ("namespace", ShTokenType::NameSpace),
-            ("select",    ShTokenType::Select),
-            ("time",      ShTokenType::Time)
-        ]);         
+pub fn tokens(st: &str) -> Vec<Token> {
+    let mut tokens: Vec<Token> = Vec::new();
+    let mut current;
+    let token_map: HashMap<&str, ShTokenType> = HashMap::from([
+        ("case",      ShTokenType::Case),
+        ("do",        ShTokenType::Do),
+        ("done",      ShTokenType::Done),
+        ("elif",      ShTokenType::Elif),
+        ("else",      ShTokenType::Else),
+        ("esac",      ShTokenType::Esac),
+        ("fi",        ShTokenType::Fi),
+        ("for",       ShTokenType::For),
+        ("if",        ShTokenType::If),
+        ("in",        ShTokenType::In),
+        ("then",      ShTokenType::Then),
+        ("until",     ShTokenType::Until),
+        ("while",     ShTokenType::While),
+        ("function",  ShTokenType::Function),
+        ("namespace", ShTokenType::NameSpace),
+        ("select",    ShTokenType::Select),
+        ("time",      ShTokenType::Time)
+    ]);         
 
-        let match_token = |current: String| -> Token {
-            match token_map.get(&current.as_str()) {
-                Some(&toke_type) => Token {
-                    lexeme: current.clone(), 
-                    token_type: toke_type
-                },
-                None => Token { 
-                    lexeme: current.clone(), 
-                    token_type: ShTokenType::Name
-                }
+    let match_token = |current: String| -> Token {
+        match token_map.get(&current.as_str()) {
+            Some(&toke_type) => Token {
+                lexeme: current.clone(), 
+                token_type: toke_type
+            },
+            None => Token { 
+                lexeme: current.clone(), 
+                token_type: ShTokenType::Name
             }
-        };
-        let mut it = st.chars().peekable();
-        while let Some(c) = it.next() {
-            let token = match c {
+        }
+    };
+    let mut it = st.chars().peekable();
+    while let Some(c) = it.next() {
+        let token = match c {
             '\n' => Token { lexeme: String::from(c), token_type: ShTokenType::NewLine },
             ' '  => Token { lexeme: String::from(c), token_type: ShTokenType::WhiteSpace },
             '\\' => Token { lexeme: String::from(c), token_type: ShTokenType::BackSlash },
@@ -155,7 +154,7 @@ pub mod tokenizer {
                     };
                     it.next();
                 } else {
-                   tok = Token { lexeme: String::from(c), token_type: ShTokenType::Control}
+                    tok = Token { lexeme: String::from(c), token_type: ShTokenType::Control}
                 }
                 tok
             },
@@ -168,7 +167,7 @@ pub mod tokenizer {
                     };
                     it.next();
                 } else {
-                   tok = Token { lexeme: String::from(c), token_type: ShTokenType::Pipe}
+                    tok = Token { lexeme: String::from(c), token_type: ShTokenType::Pipe}
                 }
                 tok
             },
@@ -198,13 +197,11 @@ pub mod tokenizer {
                 }
                 match_token(current)
             }
-            };
-            tokens.push(token);
+        };
+        tokens.push(token);
 
-        }
-        println!("{:?}", tokens);
-        tokens    
     }
-
-    
+    println!("{:?}", tokens);
+    tokens    
 }
+
