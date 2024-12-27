@@ -34,7 +34,10 @@ impl Evalable for Expr {
 impl Evalable for CommandExpr {
     fn eval(&mut self) -> i32 {
         let mut code: i32 = 0; 
-        let mut child = self.command.spawn().unwrap();
+        let mut child = match self.command.spawn() {
+            Ok(c) => c,
+            Err(v) => { println!("{}", v); return 2;} 
+        };
         // {
         //     let mut stdin =  child.stdin.take().unwrap();
         // }
@@ -79,26 +82,32 @@ impl Parser {
         parser
     }
 
-    pub fn parse(&mut self) -> impl Evalable {
+    pub fn parse(&mut self) -> Result<impl Evalable, String> {
         self.parse_pipeline()
     }
 
-    fn parse_pipeline(&mut self) -> impl Evalable {
+    fn parse_pipeline(&mut self) -> Result<impl Evalable, String> {
         let mut pipeline: Vec<Box<dyn Evalable>> = Vec::new();
-        pipeline.push(Box::new(self.parse_command()));
+        pipeline.push(Box::new(match self.parse_command() {
+            Ok(expr) => expr,
+            Err(message) => {return Err(message);} 
+        }));
         while self.current.token_type == ShTokenType::Pipe {
              self.next_token();
-             pipeline.push(Box::new(self.parse_command()));
+             pipeline.push(Box::new(match self.parse_command() {
+                 Ok(expr) => expr,
+                 Err(message) => {return Err(message);} 
+             }));
         }
-        PipeLineExpr {
+        Ok(PipeLineExpr {
             pipeline: pipeline
-        }
+        })
     }
 
-    fn parse_command(&mut self) -> impl Evalable {
+    fn parse_command(&mut self) -> Result<impl Evalable, String> {
         self.skip_whitespace();
         if self.current.token_type != ShTokenType::Name  {
-           println!("Syntax error: Expected some command, instead found '{}'.", self.current.lexeme) 
+           return Err(format!("Syntax error: Expected some command, instead found '{}'.", self.current.lexeme));
         }
         let mut command = Command::new(self.current.lexeme.clone());
         self.next_token();
@@ -109,9 +118,9 @@ impl Parser {
             self.skip_whitespace();
         }
 
-        CommandExpr {
+        Ok(CommandExpr {
             command: command
-        }
+        })
     }
     
     fn skip_whitespace(&mut self)  {

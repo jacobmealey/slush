@@ -18,8 +18,10 @@ fn repl() {
         let line = stdin.lock().lines().next().unwrap().unwrap();
         let cmd =tokenizer::tokens(&line);
         let mut parser = parser::Parser::new(&line);
-        let mut expr = parser.parse();
-        expr.eval();
+        match parser.parse() {
+            Ok(mut expr) => {expr.eval();},
+            Err(str) => {println!("{}", str);}
+        }
     }
 }
 
