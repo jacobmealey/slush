@@ -1,9 +1,10 @@
 use std::io::{self, BufRead, Write};
 
 use crate::parser::tokenizer;
-use crate::parser::Evalable;
+use crate::expr::Evalable;
 mod parser;
 mod runtime;
+mod expr;
 
 fn repl() {
     let stdin = io::stdin();
