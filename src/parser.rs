@@ -60,10 +60,16 @@ impl Parser {
         let mut command = Command::new(self.current.lexeme.clone());
         self.next_token();
         self.skip_whitespace();
+        if self.current.token_type == ShTokenType::SingleQuote {
+            command.arg(self.parse_quoted_string());
+        }
         while self.current.token_type == ShTokenType::Name {
             command.arg(self.current.lexeme.clone());
             self.next_token();
             self.skip_whitespace();
+            if self.current.token_type == ShTokenType::SingleQuote {
+                command.arg(self.parse_quoted_string());
+            }
         }
         command.stdin(Stdio::piped()).stdout(Stdio::piped());
         Ok(CommandExpr { command, output: "".to_string(), input: "".to_string()})
@@ -75,10 +81,22 @@ impl Parser {
         }
     }
 
+    fn parse_quoted_string(&mut self) -> String {
+        let mut ret: String = String::from("");
+        self.next_token();
+        while self.current.token_type != ShTokenType::SingleQuote {
+           ret.push_str(&self.current.lexeme);
+           self.next_token();
+        }
+        self.next_token(); // skip the trailing double quote
+        self.skip_whitespace(); // skip any trailing whitespace
+        ret
+    }
+
     fn next_token(&mut self) {
         // this seems really wasteful but the borrow checker beat me up -- how do we change current 
         // and prev to be references?
-        //println!("{:?}", self.current);
+        // println!("l: {} c: {:?}, p: {:?}", self.loc, self.current, self.prev);
         self.loc += 1;
         if self.loc >= self.token.len() {
             self.current = Token { lexeme: "".to_string(), token_type: ShTokenType::EndOfFile};
