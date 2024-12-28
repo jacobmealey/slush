@@ -201,7 +201,7 @@ pub fn tokens(st: &str) -> Vec<Token> {
         tokens.push(token);
 
     }
-    println!("{:?}", tokens);
+    //println!("{:?}", tokens);
     tokens    
 }
 
