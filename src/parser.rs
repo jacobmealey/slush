@@ -38,9 +38,12 @@ impl Evalable for CommandExpr {
             Ok(c) => c,
             Err(v) => { println!("{}", v); return 2;} 
         };
+
         {
-            let mut stdin =  child.stdin.take().unwrap();
-            let _ = stdin.write(self.input.as_bytes());
+            if !self.input.is_empty() {
+                let mut stdin = child.stdin.take().unwrap();
+                let _ = stdin.write(self.input.as_bytes());
+            }
         }
         match child.wait_with_output() {
             Err(e) => { println!("{}", e)},
@@ -105,7 +108,9 @@ impl Parser {
             prev: Token { lexeme: "".to_string(), token_type: ShTokenType::EndOfFile},
             loc: 0
         };
-        parser.current = parser.token[0].clone();
+        if parser.token.len() > 0 {
+            parser.current = parser.token[0].clone();
+        }
         parser
     }
 

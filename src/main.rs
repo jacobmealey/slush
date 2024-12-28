@@ -21,6 +21,6 @@ fn repl() {
 }
 
 fn main() {
-    println!("Hello, world!");
+    println!("Hello, Slush!");
     repl();
 }
