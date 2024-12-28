@@ -108,7 +108,7 @@ impl Parser {
             prev: Token { lexeme: "".to_string(), token_type: ShTokenType::EndOfFile},
             loc: 0
         };
-        if parser.token.len() > 0 {
+        if !parser.token.is_empty() {
             parser.current = parser.token[0].clone();
         }
         parser
