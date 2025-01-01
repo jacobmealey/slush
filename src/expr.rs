@@ -1,12 +1,13 @@
 use std::process;
 use std::io::Write;
+use std::process::Stdio;
 
 
 pub trait Evalable {
     // evaluate SOME command and provide a return value (0 is success, etc.) 
     fn eval(&mut self) -> i32;
     fn pipe_in(&mut self, input: String);
-    fn pipe_out(&self) -> String;
+    fn pipe_out(&mut self) -> String;
 }
 
 
@@ -50,9 +51,11 @@ impl Evalable for CommandExpr {
 
     fn pipe_in(&mut self, input: String) {
         self.input = input;
+        self.command.stdin(Stdio::piped());
     }
 
-    fn pipe_out(&self) -> String {
+    fn pipe_out(&mut self) -> String {
+       self.command.stdout(Stdio::piped());
        self.output.clone()
     }
 
@@ -69,7 +72,7 @@ impl Evalable for PipeLineExpr {
             lastcode = expr.eval();
             prev_expr = Some(expr);
         }
-        print!("{}", self.pipeline.last().expect("No such lat element").pipe_out());
+        print!("{}", self.pipeline.last_mut().expect("No such last element").pipe_out());
         lastcode
     }
     fn pipe_in(&mut self, input: String) {
@@ -78,9 +81,9 @@ impl Evalable for PipeLineExpr {
         }
     }
 
-    fn pipe_out(&self) -> String {
+    fn pipe_out(&mut self) -> String {
         if self.pipeline.len() > 1 {
-            return self.pipeline.last().expect("No such last element").pipe_out();
+            return self.pipeline.last_mut().expect("No such last element").pipe_out();
         }
         "".to_string()
     }

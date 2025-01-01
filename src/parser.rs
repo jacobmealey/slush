@@ -71,7 +71,6 @@ impl Parser {
                 command.arg(self.parse_quoted_string());
             }
         }
-        command.stdin(Stdio::piped()).stdout(Stdio::piped());
         Ok(CommandExpr { command, output: "".to_string(), input: "".to_string()})
     }
     
