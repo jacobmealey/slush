@@ -58,18 +58,21 @@ impl Parser {
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
         self.skip_whitespace();
         self.parse_assignment();
-        if self.current.token_type != ShTokenType::Name  {
-            return Err(
+        let command = match self.parse_argument() {
+            Some(a) => a,
+            None => { return Err(
                 format!(
                     "Syntax error: Expected some command, instead found '{:?}'.",
                     self.current
-                )
-            );
-        }
+                ));        
+            }
+        };
+        
         let mut command = Command::new(self.current.lexeme.clone());
         while self.current.token_type != ShTokenType::EndOfFile &&
               self.current.token_type != ShTokenType::NewLine &&
               self.current.token_type != ShTokenType::Pipe {
+            self.next_token();
             match self.parse_argument() {
                 Some(a) => {command.arg(a)},
                 None => {continue;}
@@ -106,7 +109,6 @@ impl Parser {
     }
 
     fn parse_argument(&mut self) -> Option<String>{
-        self.next_token();
         self.skip_whitespace();
         if self.current.token_type == ShTokenType::Name {
             return Some(self.current.lexeme.clone());
