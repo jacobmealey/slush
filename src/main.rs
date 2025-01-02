@@ -1,7 +1,6 @@
 use std::io::{self, BufRead, Write};
 
 use crate::parser::tokenizer;
-use crate::expr::Evalable;
 mod parser;
 mod runtime;
 mod expr;
@@ -17,7 +16,7 @@ fn repl() {
         let mut parser = parser::Parser::new(&line);
         parser.parse();
         for mut expr in parser.exprs {
-            expr.eval();
+            code = expr.eval();
         }
     }
      

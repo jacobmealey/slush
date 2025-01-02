@@ -1,5 +1,4 @@
 use std::process;
-use std::io::Write;
 use std::process::Stdio;
 use std::env;
 
@@ -51,7 +50,7 @@ impl CommandExpr {
 impl Evalable for CommandExpr {
     fn eval(&mut self) -> i32 {
         let mut code: i32 = 0; 
-        let mut child = match self.command.spawn() {
+        let child = match self.command.spawn() {
             Ok(c) => c,
             Err(v) => { println!("{}", v); return 2;} 
         };

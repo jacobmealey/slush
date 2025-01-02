@@ -9,6 +9,7 @@ use crate::expr::Evalable;
 use crate::expr::CommandExpr;
 use crate::expr::PipeLineExpr;
 use crate::expr::AssignmentExpr;
+use std::env;
 
 
 pub struct Parser {
@@ -58,26 +59,22 @@ impl Parser {
         self.skip_whitespace();
         self.parse_assignment();
         if self.current.token_type != ShTokenType::Name  {
-           return Err(
-               format!(
-                   "Syntax error: Expected some command, instead found '{:?}'.", 
-                   self.current
-                   )
-               );
+            return Err(
+                format!(
+                    "Syntax error: Expected some command, instead found '{:?}'.",
+                    self.current
+                )
+            );
         }
         let mut command = Command::new(self.current.lexeme.clone());
-        self.next_token();
-        self.skip_whitespace();
-        if self.current.token_type == ShTokenType::SingleQuote {
-            command.arg(self.parse_quoted_string());
-        }
-        while self.current.token_type == ShTokenType::Name {
-            command.arg(self.current.lexeme.clone());
-            self.next_token();
-            self.skip_whitespace();
-            if self.current.token_type == ShTokenType::SingleQuote {
-                command.arg(self.parse_quoted_string());
-            }
+        while self.current.token_type != ShTokenType::EndOfFile &&
+              self.current.token_type != ShTokenType::NewLine &&
+              self.current.token_type != ShTokenType::Pipe {
+            match self.parse_argument() {
+                Some(a) => {command.arg(a)},
+                None => {continue;}
+
+            };
         }
         Ok(CommandExpr { command })
     }
@@ -99,13 +96,27 @@ impl Parser {
                 }
             }
         }
-        if val.len() > 0 {
+        if !val.is_empty() {
             self.exprs.push(Box::new(AssignmentExpr{ key, val }));
         } else {
             self.loc = current_location;
             self.current =  self.token[self.loc].clone();
         }
         self.skip_whitespace();
+    }
+
+    fn parse_argument(&mut self) -> Option<String>{
+        self.next_token();
+        self.skip_whitespace();
+        if self.current.token_type == ShTokenType::Name {
+            return Some(self.current.lexeme.clone());
+        } else if self.current.token_type == ShTokenType::SingleQuote {
+            return Some(self.parse_quoted_string());
+        } else if self.current.token_type == ShTokenType::DollarSign {
+            self.next_token();
+            return Some(env::var(self.current.lexeme.clone()).expect(""));
+        }
+        None
     }
     
     fn skip_whitespace(&mut self)  {
