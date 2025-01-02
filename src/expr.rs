@@ -80,7 +80,10 @@ impl Evalable for PipeLineExpr {
             if i < sz - 1 {
                 expr.direct_output();
             }
-            prev_child = Some(expr.command.spawn().unwrap());
+            prev_child = Some(match expr.command.spawn() {
+                Ok(c) => c,
+                Err(v) => {println!("{}", v); return 2}
+            });
         }
         let exit_status = prev_child.expect("No such previous child").wait().unwrap();
         exit_status.code().expect("Couldn't get exit code from previous job")
