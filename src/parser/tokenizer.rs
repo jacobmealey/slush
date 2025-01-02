@@ -50,7 +50,7 @@ pub enum ShTokenType {
     Name
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Token{
     pub lexeme: String,
     pub token_type: ShTokenType 
@@ -204,4 +204,43 @@ pub fn tokens(st: &str) -> Vec<Token> {
     //println!("{:?}", tokens);
     tokens    
 }
+
+mod tests {
+    use super::*;
+    #[test]
+    fn basic_tokens() {
+        let reference_string = "| || > >> < [ [[ ] ]] &&&~${}@*";
+        let toks = tokens(reference_string);
+        let good_graces = [
+            Token { lexeme: String::from("|"), token_type: ShTokenType::Pipe},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from("||"), token_type: ShTokenType::OrIf},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from(">"), token_type: ShTokenType::RedirectOut},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from(">>"), token_type: ShTokenType::AppendOut},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from("<"), token_type: ShTokenType::RedirectIn},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from("["), token_type: ShTokenType::LeftBracket},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from("[["), token_type: ShTokenType::DoubleLeftBracket},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from("]"), token_type: ShTokenType::RightBracket},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from("]]"), token_type: ShTokenType::DoubleRightBracket},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from("&&"), token_type: ShTokenType::AndIf},
+            Token { lexeme: String::from("&"), token_type: ShTokenType::Control},
+            Token { lexeme: String::from("~"), token_type: ShTokenType::Tilde},
+            Token { lexeme: String::from("$"), token_type: ShTokenType::DollarSign},
+            Token { lexeme: String::from("{"), token_type: ShTokenType::LeftBrace},
+            Token { lexeme: String::from("}"), token_type: ShTokenType::RightBrace},
+            Token { lexeme: String::from("@"), token_type: ShTokenType::AtSign},
+            Token { lexeme: String::from("*"), token_type: ShTokenType::Star},
+        ]; 
+        assert!(good_graces.iter().eq(toks.iter()));
+    }
+}
+
 

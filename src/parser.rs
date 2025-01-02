@@ -36,8 +36,8 @@ impl Parser {
         self.parse_pipeline()
     }
 
-    fn parse_pipeline(&mut self) -> Result<impl Evalable, String> {
-        let mut pipeline: Vec<Box<dyn Evalable>> = Vec::new();
+    fn parse_pipeline(&mut self) -> Result<PipeLineExpr, String> {
+        let mut pipeline: Vec<Box<CommandExpr>> = Vec::new();
         pipeline.push(Box::new(match self.parse_command() {
             Ok(expr) => expr,
             Err(message) => {return Err(message);} 
@@ -52,7 +52,7 @@ impl Parser {
         Ok(PipeLineExpr { pipeline })
     }
 
-    fn parse_command(&mut self) -> Result<impl Evalable, String> {
+    fn parse_command(&mut self) -> Result<CommandExpr, String> {
         self.skip_whitespace();
         if self.current.token_type != ShTokenType::Name  {
            return Err(format!("Syntax error: Expected some command, instead found '{}'.", self.current.lexeme));

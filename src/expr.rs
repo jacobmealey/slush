@@ -20,10 +20,19 @@ pub struct CommandExpr {
 }
 
 pub struct PipeLineExpr {
-    pub pipeline: Vec<Box<dyn Evalable>>
+    pub pipeline: Vec<Box<CommandExpr>>
 }
 
 
+impl CommandExpr {
+    pub fn direct_intput(&mut self) {
+        self.command.stdin(Stdio::piped());
+    }
+
+    pub fn direct_output(&mut self) {
+        self.command.stdout(Stdio::piped());
+    }
+}
 
 impl Evalable for CommandExpr {
     fn eval(&mut self) -> i32 {
@@ -51,11 +60,9 @@ impl Evalable for CommandExpr {
 
     fn pipe_in(&mut self, input: String) {
         self.input = input;
-        self.command.stdin(Stdio::piped());
     }
 
     fn pipe_out(&mut self) -> String {
-       self.command.stdout(Stdio::piped());
        self.output.clone()
     }
 
@@ -64,10 +71,16 @@ impl Evalable for CommandExpr {
 impl Evalable for PipeLineExpr {
     fn eval(&mut self) -> i32 {
         let mut lastcode = 0;
-        let mut prev_expr: Option<&mut Box<dyn Evalable>> = None; 
-        for expr in &mut self.pipeline {
-            if let Some(pexpr) = prev_expr {
+        let mut prev_expr: Option<&mut Box<CommandExpr>> = None; 
+        let sz = self.pipeline.len();
+        for (i, expr) in  self.pipeline.iter_mut().enumerate() {
+            if let Some(pexpr) = &mut prev_expr {
+                expr.direct_intput();
+                println!("{:?}", pexpr.pipe_out());
                 expr.pipe_in(pexpr.pipe_out());
+            }
+            if i < sz - 1 {
+                expr.direct_output();
             }
             lastcode = expr.eval();
             prev_expr = Some(expr);
