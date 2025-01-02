@@ -5,7 +5,6 @@ use crate::tokenizer::{
     ShTokenType
 };
 use std::process::Command;
-use std::process::Stdio;
 use crate::expr::Evalable;
 use crate::expr::CommandExpr;
 use crate::expr::PipeLineExpr;
