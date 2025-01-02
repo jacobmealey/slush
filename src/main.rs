@@ -15,11 +15,12 @@ fn repl() {
         stdout.flush().expect("Error flushing to stdout");
         let line = stdin.lock().lines().next().unwrap().unwrap();
         let mut parser = parser::Parser::new(&line);
-        match parser.parse() {
-            Ok(mut expr) => {code = expr.eval();},
-            Err(str) => {println!("{}", str);}
+        parser.parse();
+        for mut expr in parser.exprs {
+            expr.eval();
         }
     }
+     
 }
 
 fn main() {

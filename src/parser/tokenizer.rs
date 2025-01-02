@@ -30,6 +30,7 @@ pub enum ShTokenType {
     AppendOut,      // >>
     AndIf,          // &&
     OrIf,           // ||
+    Equal,          // =
     Case,
     Do,
     Done,
@@ -59,7 +60,8 @@ pub struct Token{
 pub fn is_delemiter(c: char) -> bool {
     let delimeter_set = HashSet::from([
         ' ', '\t', '$', '\\', '\'', '(', ')', '{', '}', '[', ']',
-        '!', '@', '*', '#', '?', '~', '|', '>', '<', '`', '"', '&'
+        '!', '@', '*', '#', '?', '~', '|', '>', '<', '`', '"', '&',
+        '='
     ]);
     delimeter_set.contains(&c)
 }
@@ -119,6 +121,7 @@ pub fn tokens(st: &str) -> Vec<Token> {
             '#'  => Token { lexeme: String::from(c), token_type: ShTokenType::Pound },
             '?'  => Token { lexeme: String::from(c), token_type: ShTokenType::QuestionMark },
             '~'  => Token { lexeme: String::from(c), token_type: ShTokenType::Tilde },
+            '='  => Token { lexeme: String::from(c), token_type: ShTokenType::Equal },
             '['  => {
                 let tok: Token;
                 if it.peek().is_some() && *it.peek().expect("No char?") == '[' {
@@ -201,7 +204,7 @@ pub fn tokens(st: &str) -> Vec<Token> {
         tokens.push(token);
 
     }
-    //println!("{:?}", tokens);
+    println!("{:?}", tokens);
     tokens    
 }
 

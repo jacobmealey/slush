@@ -1,26 +1,40 @@
 use std::process;
 use std::io::Write;
 use std::process::Stdio;
+use std::env;
 
 
 pub trait Evalable {
     // evaluate SOME command and provide a return value (0 is success, etc.) 
     fn eval(&mut self) -> i32;
-    fn pipe_in(&mut self, input: String);
-    fn pipe_out(&mut self) -> String;
 }
 
 
 // How do we made these outputs streams? it would be nice to have it feed between
 // two child CommandExprs as they are creating them... 
+#[derive(Debug)]
 pub struct CommandExpr {
     pub command: process::Command,
-    pub output: String,
-    pub input: String,
 }
 
+#[derive(Debug)]
 pub struct PipeLineExpr {
     pub pipeline: Vec<CommandExpr>
+}
+
+#[derive(Debug)]
+pub struct AssignmentExpr {
+    pub key: String,
+    pub val: String
+}
+
+impl Evalable for AssignmentExpr {
+    fn eval(&mut self) -> i32 {
+        unsafe{
+            env::set_var(&self.key, &self.val);
+        }
+        0
+    }
 }
 
 
@@ -42,28 +56,13 @@ impl Evalable for CommandExpr {
             Err(v) => { println!("{}", v); return 2;} 
         };
 
-        {
-            if !self.input.is_empty() {
-                let mut stdin = child.stdin.take().unwrap();
-                let _ = stdin.write(self.input.as_bytes());
-            }
-        }
         match child.wait_with_output() {
             Err(e) => { println!("{}", e)},
             Ok(o) => {
                 code = o.status.code().expect("Couldn't get exit code");
-                self.output = String::from_utf8(o.stdout.clone()).unwrap();
             }
         }
         code
-    }
-
-    fn pipe_in(&mut self, input: String) {
-        self.input = input;
-    }
-
-    fn pipe_out(&mut self) -> String {
-       self.output.clone()
     }
 
 }
@@ -73,6 +72,7 @@ impl Evalable for PipeLineExpr {
         let mut prev_child: Option<process::Child> = None;
         let sz = self.pipeline.len();
         for (i, expr) in  self.pipeline.iter_mut().enumerate() {
+            println!("{:?}", expr);
             if let Some(pchild) = prev_child {
                 expr.direct_intput();
                 expr.command.stdin(Stdio::from(pchild.stdout.unwrap()));
@@ -87,18 +87,5 @@ impl Evalable for PipeLineExpr {
         }
         let exit_status = prev_child.expect("No such previous child").wait().unwrap();
         exit_status.code().expect("Couldn't get exit code from previous job")
-    }
-
-    fn pipe_in(&mut self, input: String) {
-        if self.pipeline.len() > 1 {
-            self.pipeline[0].pipe_in(input);
-        }
-    }
-
-    fn pipe_out(&mut self) -> String {
-        if self.pipeline.len() > 1 {
-            return self.pipeline.last_mut().expect("No such last element").pipe_out();
-        }
-        "".to_string()
     }
 }

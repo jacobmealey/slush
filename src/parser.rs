@@ -8,10 +8,12 @@ use std::process::Command;
 use crate::expr::Evalable;
 use crate::expr::CommandExpr;
 use crate::expr::PipeLineExpr;
+use crate::expr::AssignmentExpr;
 
 
 pub struct Parser {
     token: Vec<Token>,
+    pub exprs: Vec<Box<dyn Evalable>>,
     current: Token,
     prev: Token,
     loc: usize
@@ -21,6 +23,7 @@ impl Parser {
     pub fn new(line: &str) -> Parser {
         let mut parser = Parser {
             token: tokens(line),
+            exprs: Vec::new(),
             current: Token { lexeme: "".to_string(), token_type: ShTokenType::EndOfFile},
             prev: Token { lexeme: "".to_string(), token_type: ShTokenType::EndOfFile},
             loc: 0
@@ -31,30 +34,36 @@ impl Parser {
         parser
     }
 
-    pub fn parse(&mut self) -> Result<impl Evalable, String> {
-        self.parse_pipeline()
+    pub fn parse(&mut self) {
+        self.parse_pipeline();
     }
 
-    fn parse_pipeline(&mut self) -> Result<PipeLineExpr, String> {
+    fn parse_pipeline(&mut self) {
         let mut pipeline: Vec<CommandExpr> = Vec::new();
         pipeline.push(match self.parse_command() {
             Ok(expr) => expr,
-            Err(message) => {return Err(message);} 
+            Err(message) => {println!("{}", message); return;} 
         });
         while self.current.token_type == ShTokenType::Pipe {
              self.next_token();
              pipeline.push(match self.parse_command() {
                  Ok(expr) => expr,
-                 Err(message) => {return Err(message);} 
+                 Err(message) => {println!("{}", message); return;} 
              });
         }
-        Ok(PipeLineExpr { pipeline })
+        self.exprs.push(Box::new(PipeLineExpr { pipeline }));
     }
 
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
         self.skip_whitespace();
+        self.parse_assignment();
         if self.current.token_type != ShTokenType::Name  {
-           return Err(format!("Syntax error: Expected some command, instead found '{}'.", self.current.lexeme));
+           return Err(
+               format!(
+                   "Syntax error: Expected some command, instead found '{:?}'.", 
+                   self.current
+                   )
+               );
         }
         let mut command = Command::new(self.current.lexeme.clone());
         self.next_token();
@@ -70,7 +79,35 @@ impl Parser {
                 command.arg(self.parse_quoted_string());
             }
         }
-        Ok(CommandExpr { command, output: "".to_string(), input: "".to_string()})
+        Ok(CommandExpr { command })
+    }
+
+    fn parse_assignment(&mut self) {
+        let current_location = self.loc;
+        let mut key: String = String::from("");
+        let mut val: String = String::from("");
+        if self.current.token_type == ShTokenType::Name {
+            key = self.current.lexeme.clone();
+            self.next_token();
+            if self.current.token_type == ShTokenType::Equal {
+                self.next_token();
+                if self.current.token_type == ShTokenType::SingleQuote {
+                   val = self.parse_quoted_string();
+                } else if self.current.token_type == ShTokenType::Name {
+                    val =  self.current.lexeme.clone();
+                    self.next_token();
+                }
+            }
+        }
+        if val.len() > 0 {
+            println!("{:?}", AssignmentExpr { key: key.clone(), val: val.clone()} );
+            self.exprs.push(Box::new(AssignmentExpr{ key, val }));
+            println!("Help help");
+        } else {
+            self.loc = current_location;
+            self.current =  self.token[self.loc].clone();
+        }
+        self.skip_whitespace();
     }
     
     fn skip_whitespace(&mut self)  {
@@ -104,5 +141,6 @@ impl Parser {
                 self.prev= self.token[self.loc - 1].clone();
             }
         }
+        println!("{:?}", self.current);
     }
 }
