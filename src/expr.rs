@@ -72,21 +72,22 @@ impl Evalable for PipeLineExpr {
     fn eval(&mut self) -> i32 {
         let mut lastcode = 0;
         let mut prev_expr: Option<&mut Box<CommandExpr>> = None; 
+        let mut prev_child: Option<process::Child> = None;
         let sz = self.pipeline.len();
         for (i, expr) in  self.pipeline.iter_mut().enumerate() {
             if let Some(pexpr) = &mut prev_expr {
                 expr.direct_intput();
-                println!("{:?}", pexpr.pipe_out());
-                expr.pipe_in(pexpr.pipe_out());
+                expr.command.stdin(Stdio::from(prev_child.unwrap().stdout.unwrap()));
             }
             if i < sz - 1 {
                 expr.direct_output();
             }
-            lastcode = expr.eval();
+            prev_child = Some(expr.command.spawn().unwrap());
+            //lastcode = expr.eval();
             prev_expr = Some(expr);
         }
-        print!("{}", self.pipeline.last_mut().expect("No such last element").pipe_out());
-        lastcode
+        let exit_status = prev_child.expect("No such previous child").wait().unwrap();
+        exit_status.code().expect("Couldn't get exit code from previous job")
     }
     fn pipe_in(&mut self, input: String) {
         if self.pipeline.len() > 1 {
