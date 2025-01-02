@@ -72,7 +72,6 @@ impl Evalable for PipeLineExpr {
         let mut prev_child: Option<process::Child> = None;
         let sz = self.pipeline.len();
         for (i, expr) in  self.pipeline.iter_mut().enumerate() {
-            println!("{:?}", expr);
             if let Some(pchild) = prev_child {
                 expr.direct_intput();
                 expr.command.stdin(Stdio::from(pchild.stdout.unwrap()));

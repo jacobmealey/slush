@@ -100,9 +100,7 @@ impl Parser {
             }
         }
         if val.len() > 0 {
-            println!("{:?}", AssignmentExpr { key: key.clone(), val: val.clone()} );
             self.exprs.push(Box::new(AssignmentExpr{ key, val }));
-            println!("Help help");
         } else {
             self.loc = current_location;
             self.current =  self.token[self.loc].clone();
@@ -141,6 +139,5 @@ impl Parser {
                 self.prev= self.token[self.loc - 1].clone();
             }
         }
-        println!("{:?}", self.current);
     }
 }
