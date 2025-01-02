@@ -7,7 +7,8 @@
 - [x] Basic single quote strings
 - [ ] Double quote strings with substitutions
 - [ ] Environment handling
-  - [ ] Calling variables
+  - [x] Calling variables
+  - [x] Assigning Variables
   - [ ] Return values with $?
 - [ ] Control Flow
   - [ ] if
