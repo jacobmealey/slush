@@ -3,6 +3,7 @@
   - [ ] Backtick subshell
   - [ ] Dollar sign subshell
 - [x] Pipelines
+  - [ ] better pipelines that don't require EOF 
 - [x] Basic single quote strings
 - [ ] Double quote strings with substitutions
 - [ ] Environment handling
