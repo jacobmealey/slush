@@ -1,0 +1,17 @@
+## Todo
+- [ ] Subshell
+  - [ ] Backtick subshell
+  - [ ] Dollar sign subshell
+- [x] Pipelines
+- [x] Basic single quote strings
+- [ ] Double quote strings with substitutions
+- [ ] Environment handling
+  - [ ] Calling variables
+  - [ ] Return values with $?
+- [ ] Control Flow
+  - [ ] if
+  - [ ] elif
+  - [ ] else
+  - [ ] while
+  - [ ] for
+- [ ] Background process control 
