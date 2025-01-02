@@ -20,7 +20,7 @@ pub struct CommandExpr {
 }
 
 pub struct PipeLineExpr {
-    pub pipeline: Vec<Box<CommandExpr>>
+    pub pipeline: Vec<CommandExpr>
 }
 
 

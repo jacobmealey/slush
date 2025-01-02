@@ -36,17 +36,17 @@ impl Parser {
     }
 
     fn parse_pipeline(&mut self) -> Result<PipeLineExpr, String> {
-        let mut pipeline: Vec<Box<CommandExpr>> = Vec::new();
-        pipeline.push(Box::new(match self.parse_command() {
+        let mut pipeline: Vec<CommandExpr> = Vec::new();
+        pipeline.push(match self.parse_command() {
             Ok(expr) => expr,
             Err(message) => {return Err(message);} 
-        }));
+        });
         while self.current.token_type == ShTokenType::Pipe {
              self.next_token();
-             pipeline.push(Box::new(match self.parse_command() {
+             pipeline.push(match self.parse_command() {
                  Ok(expr) => expr,
                  Err(message) => {return Err(message);} 
-             }));
+             });
         }
         Ok(PipeLineExpr { pipeline })
     }
