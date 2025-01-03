@@ -58,7 +58,7 @@ impl Parser {
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
         self.skip_whitespace();
         self.parse_assignment();
-        let command = match self.parse_argument() {
+        let command_name = match self.parse_argument() {
             Some(a) => a,
             None => { return Err(
                 format!(
@@ -68,20 +68,28 @@ impl Parser {
             }
         };
         
-        let mut command = Command::new(self.current.lexeme.clone());
+        let mut command = Command::new(command_name);
         while self.current.token_type != ShTokenType::EndOfFile &&
               self.current.token_type != ShTokenType::NewLine &&
               self.current.token_type != ShTokenType::Pipe {
             self.next_token();
             match self.parse_argument() {
                 Some(a) => {command.arg(a)},
-                None => {continue;}
+                None => {continue;} // ignore all tokens until a delimiting token
 
             };
         }
         Ok(CommandExpr { command })
     }
 
+    // assignment expressions are optional at the beginning, it can be difficult
+    // to tell if the assignment is a TRUE assignment until you get to an '=' sign
+    // for example:
+    // [0] $ VAR="Something"
+    //     |----^
+    // here VAR could be a valid standalone command, and we don't /know/ its an
+    // assignment until we see the the '=' sign, if we don't we have to rewind to
+    // the beginning. There must be a better way to do this?
     fn parse_assignment(&mut self) {
         let current_location = self.loc;
         let mut key: String = String::from("");
@@ -91,12 +99,11 @@ impl Parser {
             self.next_token();
             if self.current.token_type == ShTokenType::Equal {
                 self.next_token();
-                if self.current.token_type == ShTokenType::SingleQuote {
-                   val = self.parse_quoted_string();
-                } else if self.current.token_type == ShTokenType::Name {
-                    val =  self.current.lexeme.clone();
-                    self.next_token();
-                }
+                // an assignment can be a string, an @VAR or a direct token
+                val = match self.parse_argument() {
+                    Some(a) => {self.next_token(); a},
+                    None => String::from("")
+                };
             }
         }
         if !val.is_empty() {
@@ -108,6 +115,11 @@ impl Parser {
         self.skip_whitespace();
     }
 
+    // Arguments can be A single quoteless string (Name), and quoted string or
+    // a dollar sign var. so you could do:
+    //   $ ls /tmp
+    //   $ ls '/tmp'
+    //   $ ls $TEMP_DIR
     fn parse_argument(&mut self) -> Option<String>{
         self.skip_whitespace();
         if self.current.token_type == ShTokenType::Name {
@@ -127,6 +139,8 @@ impl Parser {
         }
     }
 
+    // On a single quote string we want to read every lexeme regardless
+    // of the token type until we see another single quote.
     fn parse_quoted_string(&mut self) -> String {
         let mut ret: String = String::from("");
         self.next_token();
