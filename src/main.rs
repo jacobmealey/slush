@@ -2,7 +2,6 @@ use std::io::{self, BufRead, Write};
 
 use crate::parser::tokenizer;
 mod parser;
-mod runtime;
 mod expr;
 
 fn repl() {
@@ -19,7 +18,6 @@ fn repl() {
             code = expr.eval();
         }
     }
-     
 }
 
 fn main() {

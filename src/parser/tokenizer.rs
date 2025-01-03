@@ -245,6 +245,39 @@ mod tests {
         ]; 
         assert!(good_graces.iter().eq(toks.iter()));
     }
+    
+    #[test]
+    fn wordy_tokes() {
+        let reference_string = "if elif else fi while";
+        let toks = tokens(reference_string);
+        let good_graces = [
+            Token { lexeme: String::from("if"), token_type: ShTokenType::If},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from("elif"), token_type: ShTokenType::Elif},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from("else"), token_type: ShTokenType::Else},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from("fi"), token_type: ShTokenType::Fi},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from("while"), token_type: ShTokenType::While},
+        ];
+        assert!(good_graces.iter().eq(toks.iter()));
+    }
+
+    #[test]
+    fn words_adjacent_to_singles() {
+        let reference_string = "if|while{ elif";
+        let toks = tokens(reference_string);
+        let good_graces = [
+            Token { lexeme: String::from("if"), token_type: ShTokenType::If},
+            Token { lexeme: String::from("|"), token_type: ShTokenType::Pipe},
+            Token { lexeme: String::from("while"), token_type: ShTokenType::While},
+            Token { lexeme: String::from("{"), token_type: ShTokenType::LeftBrace},
+            Token { lexeme: String::from(" "), token_type: ShTokenType::WhiteSpace},
+            Token { lexeme: String::from("elif"), token_type: ShTokenType::Elif}
+        ];
+        assert!(good_graces.iter().eq(toks.iter()));
+    }
 }
 
 
