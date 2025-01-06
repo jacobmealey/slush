@@ -1,4 +1,5 @@
 use std::process;
+use std::process::Command;
 use std::process::Stdio;
 use std::env;
 
@@ -9,11 +10,18 @@ pub trait Evalable {
 }
 
 
+#[derive(Debug)]
+pub struct VariableLookup {
+    pub name: String
+}
+
+
 // How do we made these outputs streams? it would be nice to have it feed between
 // two child CommandExprs as they are creating them... 
 #[derive(Debug)]
 pub struct CommandExpr {
-    pub command: process::Command,
+    pub command: Argument,
+    pub arguments: Vec<Argument>
 }
 
 #[derive(Debug)]
@@ -27,6 +35,13 @@ pub struct AssignmentExpr {
     pub val: String
 }
 
+// Subshell is simply a wrapper around a string which can be fed into a parser,
+// evaluated and stdout returned.
+// #[derive(Debug)]
+// pub struct SubShellExpr {
+//     pub shell: String
+// }
+
 impl Evalable for AssignmentExpr {
     fn eval(&mut self) -> i32 {
         unsafe{
@@ -36,34 +51,21 @@ impl Evalable for AssignmentExpr {
     }
 }
 
-
 impl CommandExpr {
-    pub fn direct_intput(&mut self) {
-        self.command.stdin(Stdio::piped());
-    }
+    pub fn build_command(&self) -> Box<process::Command> {
+        let mut cmd = Box::new(Command::new(match &self.command {
+            Argument::Name(name) => name.clone(),
+            Argument::Variable(variable) => get_variable(variable.name.clone())
+        }));
 
-    pub fn direct_output(&mut self) {
-        self.command.stdout(Stdio::piped());
-    }
-}
-
-impl Evalable for CommandExpr {
-    fn eval(&mut self) -> i32 {
-        let mut code: i32 = 0; 
-        let child = match self.command.spawn() {
-            Ok(c) => c,
-            Err(v) => { println!("{}", v); return 2;} 
-        };
-
-        match child.wait_with_output() {
-            Err(e) => { println!("{}", e)},
-            Ok(o) => {
-                code = o.status.code().expect("Couldn't get exit code");
-            }
+        for arg in &self.arguments {
+            cmd.arg(match arg {
+                Argument::Name(n) => n.clone(),
+                Argument::Variable(variable) => get_variable(variable.name.clone())
+            });
         }
-        code
+        cmd
     }
-
 }
 
 impl Evalable for PipeLineExpr {
@@ -71,14 +73,14 @@ impl Evalable for PipeLineExpr {
         let mut prev_child: Option<process::Child> = None;
         let sz = self.pipeline.len();
         for (i, expr) in  self.pipeline.iter_mut().enumerate() {
+            let mut cmd = expr.build_command();
             if let Some(pchild) = prev_child {
-                expr.direct_intput();
-                expr.command.stdin(Stdio::from(pchild.stdout.unwrap()));
+                cmd.stdin(Stdio::from(pchild.stdout.unwrap()));
             }
             if i < sz - 1 {
-                expr.direct_output();
+                cmd.stdout(Stdio::piped());
             }
-            prev_child = Some(match expr.command.spawn() {
+            prev_child = Some(match cmd.spawn() {
                 Ok(c) => c,
                 Err(v) => {println!("{}", v); return 2}
             });
@@ -86,4 +88,22 @@ impl Evalable for PipeLineExpr {
         let exit_status = prev_child.expect("No such previous child").wait().unwrap();
         exit_status.code().expect("Couldn't get exit code from previous job")
     }
+}
+
+#[derive(Debug)]
+pub enum Argument {
+    Name(String),
+    Variable(VariableLookup)
+}
+
+// #[derive(Debug)]
+// pub enum Expr {
+//     CommandExpr(CommandExpr),
+//     PipeLineExpr(PipeLineExpr),
+//     AssignmentExpr(AssignmentExpr),
+//     SubShellExpr(SubShellExpr)
+// }
+
+fn get_variable(var: String) -> String {
+    env::var(var).expect("")
 }

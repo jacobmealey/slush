@@ -8,6 +8,7 @@ fn repl() {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
     let mut code = 0;
+
     loop {
         print!("[{}] $ ", code);
         stdout.flush().expect("Error flushing to stdout");
@@ -15,6 +16,7 @@ fn repl() {
         let mut parser = parser::Parser::new(&line);
         parser.parse();
         for mut expr in parser.exprs {
+
             code = expr.eval();
         }
     }

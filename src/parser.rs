@@ -4,12 +4,13 @@ use crate::tokenizer::{
     tokens,
     ShTokenType
 };
-use std::process::Command;
 use crate::expr::Evalable;
 use crate::expr::CommandExpr;
 use crate::expr::PipeLineExpr;
 use crate::expr::AssignmentExpr;
-use std::env;
+use crate::expr::VariableLookup;
+use crate::expr::Argument;
+use crate::expr::Argument::*;
 
 
 pub struct Parser {
@@ -68,18 +69,21 @@ impl Parser {
             }
         };
         
-        let mut command = Command::new(command_name);
+        let mut command = CommandExpr {
+            command: command_name,
+            arguments: Vec::new()
+        };
         while self.current.token_type != ShTokenType::EndOfFile &&
               self.current.token_type != ShTokenType::NewLine &&
               self.current.token_type != ShTokenType::Pipe {
             self.next_token();
             match self.parse_argument() {
-                Some(a) => {command.arg(a)},
+                Some(a) => {command.arguments.push(a)},
                 None => {continue;} // ignore all tokens until a delimiting token
 
             };
         }
-        Ok(CommandExpr { command })
+        Ok(command)
     }
 
     // assignment expressions are optional at the beginning, it can be difficult
@@ -101,7 +105,10 @@ impl Parser {
                 self.next_token();
                 // an assignment can be a string, an @VAR or a direct token
                 val = match self.parse_argument() {
-                    Some(a) => {self.next_token(); a},
+                    Some(a) => {self.next_token(); match a {
+                        Name(name) => name,
+                        Variable(var) => var.name
+                    }},
                     None => String::from("")
                 };
             }
@@ -120,15 +127,16 @@ impl Parser {
     //   $ ls /tmp
     //   $ ls '/tmp'
     //   $ ls $TEMP_DIR
-    fn parse_argument(&mut self) -> Option<String>{
+    fn parse_argument(&mut self) -> Option<Argument>{
         self.skip_whitespace();
         if self.current.token_type == ShTokenType::Name {
-            return Some(self.current.lexeme.clone());
+            return Some(Argument::Name(self.current.lexeme.clone()));
         } else if self.current.token_type == ShTokenType::SingleQuote {
-            return Some(self.parse_quoted_string());
+            return Some(Argument::Name(self.parse_quoted_string()));
         } else if self.current.token_type == ShTokenType::DollarSign {
             self.next_token();
-            return Some(env::var(self.current.lexeme.clone()).expect(""));
+            // return Some(env::var(self.current.lexeme.clone()).expect(""));
+            return Some(Argument::Variable(VariableLookup {name: self.current.lexeme.clone()}))
         }
         None
     }
