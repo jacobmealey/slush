@@ -2,6 +2,7 @@ use std::process;
 use std::process::Command;
 use std::process::Stdio;
 use std::env;
+use crate::parser::Parser;
 
 
 pub trait Evalable {
@@ -32,20 +33,35 @@ pub struct PipeLineExpr {
 #[derive(Debug)]
 pub struct AssignmentExpr {
     pub key: String,
-    pub val: String
+    pub val: Argument 
 }
 
 // Subshell is simply a wrapper around a string which can be fed into a parser,
 // evaluated and stdout returned.
-// #[derive(Debug)]
-// pub struct SubShellExpr {
-//     pub shell: String
-// }
+#[derive(Debug)]
+pub struct SubShellExpr {
+    pub shell: String
+}
+
+impl SubShellExpr {
+    pub fn stdout(&self) -> String {
+        let mut parser = Parser::new(&self.shell);
+        let mut shell_output: String = Default::default();
+        parser.parse();
+        for expr in parser.exprs {
+            match expr {
+                Expr::PipeLineExpr(mut pl) => pl.run_with_out(&mut shell_output),
+                Expr::AssignmentExpr(mut ass) => ass.eval()
+            };
+        }
+        shell_output
+    }
+}
 
 impl Evalable for AssignmentExpr {
     fn eval(&mut self) -> i32 {
         unsafe{
-            env::set_var(&self.key, &self.val);
+            env::set_var(&self.key, self.val.eval());
         }
         0
     }
@@ -53,19 +69,13 @@ impl Evalable for AssignmentExpr {
 
 impl CommandExpr {
     pub fn build_command(&self) -> Box<process::Command> {
-        let mut cmd = Box::new(Command::new(match &self.command {
-            Argument::Name(name) => name.clone(),
-            Argument::Variable(variable) => get_variable(variable.name.clone())
-        }));
-
+        let mut cmd = Box::new(Command::new(self.command.eval())); 
         for arg in &self.arguments {
-            cmd.arg(match arg {
-                Argument::Name(n) => n.clone(),
-                Argument::Variable(variable) => get_variable(variable.name.clone())
-            });
+            cmd.arg(arg.eval());
         }
         cmd
     }
+
 }
 
 impl Evalable for PipeLineExpr {
@@ -90,19 +100,59 @@ impl Evalable for PipeLineExpr {
     }
 }
 
+impl PipeLineExpr {
+    // how to unduplicated
+    fn run_with_out(&mut self, output: &mut String) -> i32 {
+        let mut prev_child: Option<process::Child> = None;
+        for expr in  self.pipeline.iter_mut() {
+            let mut cmd = expr.build_command();
+            if let Some(pchild) = prev_child {
+                cmd.stdin(Stdio::from(pchild.stdout.unwrap()));
+            }
+            cmd.stdout(Stdio::piped());
+            prev_child = Some(match cmd.spawn() {
+                Ok(c) => c,
+                Err(v) => {println!("{}", v); return 2}
+            });
+        }
+
+        let outie = prev_child
+            .expect("No Child Process")
+            .wait_with_output()
+            .expect("Nothing");
+        *output = String::from_utf8(outie.stdout).unwrap();
+        // trim trailing newlines if its an issue
+        if output.ends_with('\n') {
+            output.pop();
+        }
+        outie.status.code().expect("Couldn't get exit code from previous job")
+    }
+}
+
 #[derive(Debug)]
 pub enum Argument {
     Name(String),
-    Variable(VariableLookup)
+    Variable(VariableLookup),
+    SubShell(SubShellExpr)
 }
 
-// #[derive(Debug)]
-// pub enum Expr {
-//     CommandExpr(CommandExpr),
-//     PipeLineExpr(PipeLineExpr),
-//     AssignmentExpr(AssignmentExpr),
-//     SubShellExpr(SubShellExpr)
-// }
+impl Argument {
+    fn eval(&self) -> String {
+        match self {
+            Argument::Name(n) => n.clone(),
+            Argument::Variable(variable) => get_variable(variable.name.clone()),
+            Argument::SubShell(ss) => ss.stdout()
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum Expr {
+    //CommandExpr(CommandExpr),
+    PipeLineExpr(PipeLineExpr),
+    AssignmentExpr(AssignmentExpr),
+    //SubShellExpr(SubShellExpr)
+}
 
 fn get_variable(var: String) -> String {
     env::var(var).expect("")

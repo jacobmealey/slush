@@ -61,7 +61,7 @@ pub fn is_delemiter(c: char) -> bool {
     let delimeter_set = HashSet::from([
         ' ', '\t', '$', '\\', '\'', '(', ')', '{', '}', '[', ']',
         '!', '@', '*', '#', '?', '~', '|', '>', '<', '`', '"', '&',
-        '='
+        '=', '\n'
     ]);
     delimeter_set.contains(&c)
 }

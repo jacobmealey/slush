@@ -4,18 +4,18 @@ use crate::tokenizer::{
     tokens,
     ShTokenType
 };
-use crate::expr::Evalable;
 use crate::expr::CommandExpr;
 use crate::expr::PipeLineExpr;
 use crate::expr::AssignmentExpr;
 use crate::expr::VariableLookup;
 use crate::expr::Argument;
-use crate::expr::Argument::*;
+use crate::expr::SubShellExpr;
+use crate::expr::Expr;
 
 
 pub struct Parser {
     token: Vec<Token>,
-    pub exprs: Vec<Box<dyn Evalable>>,
+    pub exprs: Vec<Expr>,
     current: Token,
     prev: Token,
     loc: usize
@@ -53,7 +53,7 @@ impl Parser {
                  Err(message) => {println!("{}", message); return;} 
              });
         }
-        self.exprs.push(Box::new(PipeLineExpr { pipeline }));
+        self.exprs.push(Expr::PipeLineExpr(PipeLineExpr { pipeline }));
     }
 
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
@@ -97,24 +97,21 @@ impl Parser {
     fn parse_assignment(&mut self) {
         let current_location = self.loc;
         let mut key: String = String::from("");
-        let mut val: String = String::from("");
+        let mut val: Option<Argument> = None;
         if self.current.token_type == ShTokenType::Name {
             key = self.current.lexeme.clone();
             self.next_token();
             if self.current.token_type == ShTokenType::Equal {
                 self.next_token();
                 // an assignment can be a string, an @VAR or a direct token
-                val = match self.parse_argument() {
-                    Some(a) => {self.next_token(); match a {
-                        Name(name) => name,
-                        Variable(var) => var.name
-                    }},
-                    None => String::from("")
-                };
+                val = Some(match self.parse_argument() {
+                    Some(a) => a, 
+                    None => Argument::Name(String::from(""))
+                });
             }
         }
-        if !val.is_empty() {
-            self.exprs.push(Box::new(AssignmentExpr{ key, val }));
+        if let Some(argtype) = val {
+            self.exprs.push(Expr::AssignmentExpr(AssignmentExpr{ key, val: argtype }));
         } else {
             self.loc = current_location;
             self.current =  self.token[self.loc].clone();
@@ -129,16 +126,20 @@ impl Parser {
     //   $ ls $TEMP_DIR
     fn parse_argument(&mut self) -> Option<Argument>{
         self.skip_whitespace();
-        if self.current.token_type == ShTokenType::Name {
-            return Some(Argument::Name(self.current.lexeme.clone()));
-        } else if self.current.token_type == ShTokenType::SingleQuote {
-            return Some(Argument::Name(self.parse_quoted_string()));
-        } else if self.current.token_type == ShTokenType::DollarSign {
-            self.next_token();
-            // return Some(env::var(self.current.lexeme.clone()).expect(""));
-            return Some(Argument::Variable(VariableLookup {name: self.current.lexeme.clone()}))
+        match self.current.token_type {
+            ShTokenType::Name => Some(Argument::Name(self.current.lexeme.clone())),
+            ShTokenType::SingleQuote =>
+                Some(Argument::Name(self.parse_quoted_string())),
+            ShTokenType::DollarSign => {
+                self.next_token();
+                Some(Argument::Variable(VariableLookup {name: self.current.lexeme.clone()}))
+            },
+            ShTokenType::BackTick =>
+                Some(Argument::SubShell(SubShellExpr {
+                    shell: self.collect_until(ShTokenType::BackTick)
+                })),
+            _ => None
         }
-        None
     }
     
     fn skip_whitespace(&mut self)  {
@@ -150,9 +151,21 @@ impl Parser {
     // On a single quote string we want to read every lexeme regardless
     // of the token type until we see another single quote.
     fn parse_quoted_string(&mut self) -> String {
+        // let mut ret: String = String::from("");
+        // self.next_token();
+        // while self.current.token_type != ShTokenType::SingleQuote {
+        //    ret.push_str(&self.current.lexeme);
+        //    self.next_token();
+        // }
+        // self.next_token(); // skip the trailing double quote
+        // self.skip_whitespace(); // skip any trailing whitespace
+        self.collect_until(ShTokenType::SingleQuote)
+    }
+
+    fn collect_until(&mut self, end: ShTokenType) -> String {
         let mut ret: String = String::from("");
         self.next_token();
-        while self.current.token_type != ShTokenType::SingleQuote {
+        while self.current.token_type != end {
            ret.push_str(&self.current.lexeme);
            self.next_token();
         }
