@@ -26,8 +26,14 @@ impl Parser {
         let mut parser = Parser {
             token: tokens(line),
             exprs: Vec::new(),
-            current: Token { lexeme: "".to_string(), token_type: ShTokenType::EndOfFile},
-            prev: Token { lexeme: "".to_string(), token_type: ShTokenType::EndOfFile},
+            current: Token { 
+                lexeme: "".to_string(),
+                token_type: ShTokenType::EndOfFile
+            },
+            prev: Token { 
+                lexeme: "".to_string(), 
+                token_type: ShTokenType::EndOfFile
+            },
             loc: 0
         };
         if !parser.token.is_empty() {
@@ -157,7 +163,8 @@ impl Parser {
     fn collect_until(&mut self, end: ShTokenType) -> String {
         let mut ret: String = String::from("");
         self.next_token();
-        while self.current.token_type != end {
+        while self.current.token_type != end && 
+              self.current.token_type != ShTokenType::EndOfFile {
            ret.push_str(&self.current.lexeme);
            self.next_token();
         }
