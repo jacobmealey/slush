@@ -1,10 +1,10 @@
 use std::io::{self, BufRead, Write};
 
-use crate::parser::tokenizer;
-use crate::expr::Expr;
 use crate::expr::Evalable;
-mod parser;
+use crate::expr::Expr;
+use crate::parser::tokenizer;
 mod expr;
+mod parser;
 
 fn repl() {
     let stdin = io::stdin();
@@ -20,7 +20,7 @@ fn repl() {
         for expr in parser.exprs {
             code = match expr {
                 Expr::PipeLineExpr(mut e) => e.eval(),
-                Expr::AssignmentExpr(mut ass) => ass.eval()
+                Expr::AssignmentExpr(mut ass) => ass.eval(),
             }
         }
     }

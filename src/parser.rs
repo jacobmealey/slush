@@ -1,24 +1,19 @@
 pub mod tokenizer;
-use crate::tokenizer::{
-    Token,
-    tokens,
-    ShTokenType
-};
-use crate::expr::CommandExpr;
-use crate::expr::PipeLineExpr;
-use crate::expr::AssignmentExpr;
-use crate::expr::VariableLookup;
 use crate::expr::Argument;
-use crate::expr::SubShellExpr;
+use crate::expr::AssignmentExpr;
+use crate::expr::CommandExpr;
 use crate::expr::Expr;
-
+use crate::expr::PipeLineExpr;
+use crate::expr::SubShellExpr;
+use crate::expr::VariableLookup;
+use crate::tokenizer::{tokens, ShTokenType, Token};
 
 pub struct Parser {
     token: Vec<Token>,
     pub exprs: Vec<Expr>,
     current: Token,
     prev: Token,
-    loc: usize
+    loc: usize,
 }
 
 impl Parser {
@@ -26,15 +21,15 @@ impl Parser {
         let mut parser = Parser {
             token: tokens(line),
             exprs: Vec::new(),
-            current: Token { 
+            current: Token {
                 lexeme: "".to_string(),
-                token_type: ShTokenType::EndOfFile
+                token_type: ShTokenType::EndOfFile,
             },
-            prev: Token { 
-                lexeme: "".to_string(), 
-                token_type: ShTokenType::EndOfFile
+            prev: Token {
+                lexeme: "".to_string(),
+                token_type: ShTokenType::EndOfFile,
             },
-            loc: 0
+            loc: 0,
         };
         if !parser.token.is_empty() {
             parser.current = parser.token[0].clone();
@@ -50,16 +45,23 @@ impl Parser {
         let mut pipeline: Vec<CommandExpr> = Vec::new();
         pipeline.push(match self.parse_command() {
             Ok(expr) => expr,
-            Err(message) => {println!("{}", message); return;} 
+            Err(message) => {
+                println!("{}", message);
+                return;
+            }
         });
         while self.current.token_type == ShTokenType::Pipe {
-             self.next_token();
-             pipeline.push(match self.parse_command() {
-                 Ok(expr) => expr,
-                 Err(message) => {println!("{}", message); return;} 
-             });
+            self.next_token();
+            pipeline.push(match self.parse_command() {
+                Ok(expr) => expr,
+                Err(message) => {
+                    println!("{}", message);
+                    return;
+                }
+            });
         }
-        self.exprs.push(Expr::PipeLineExpr(PipeLineExpr { pipeline }));
+        self.exprs
+            .push(Expr::PipeLineExpr(PipeLineExpr { pipeline }));
     }
 
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
@@ -67,26 +69,28 @@ impl Parser {
         self.parse_assignment();
         let command_name = match self.parse_argument() {
             Some(a) => a,
-            None => { return Err(
-                format!(
+            None => {
+                return Err(format!(
                     "Syntax error: Expected some command, instead found '{:?}'.",
                     self.current
-                ));        
+                ));
             }
         };
-        
+
         let mut command = CommandExpr {
             command: command_name,
-            arguments: Vec::new()
+            arguments: Vec::new(),
         };
-        while self.current.token_type != ShTokenType::EndOfFile &&
-              self.current.token_type != ShTokenType::NewLine &&
-              self.current.token_type != ShTokenType::Pipe {
+        while self.current.token_type != ShTokenType::EndOfFile
+            && self.current.token_type != ShTokenType::NewLine
+            && self.current.token_type != ShTokenType::Pipe
+        {
             self.next_token();
             match self.parse_argument() {
-                Some(a) => {command.arguments.push(a)},
-                None => {continue;} // ignore all tokens until a delimiting token
-
+                Some(a) => command.arguments.push(a),
+                None => {
+                    continue;
+                } // ignore all tokens until a delimiting token
             };
         }
         Ok(command)
@@ -111,16 +115,17 @@ impl Parser {
                 self.next_token();
                 // an assignment can be a string, an @VAR or a direct token
                 val = Some(match self.parse_argument() {
-                    Some(a) => a, 
-                    None => Argument::Name(String::from(""))
+                    Some(a) => a,
+                    None => Argument::Name(String::from("")),
                 });
             }
         }
         if let Some(argtype) = val {
-            self.exprs.push(Expr::AssignmentExpr(AssignmentExpr{ key, val: argtype }));
+            self.exprs
+                .push(Expr::AssignmentExpr(AssignmentExpr { key, val: argtype }));
         } else {
             self.loc = current_location;
-            self.current =  self.token[self.loc].clone();
+            self.current = self.token[self.loc].clone();
         }
         self.skip_whitespace();
     }
@@ -130,25 +135,25 @@ impl Parser {
     //   $ ls /tmp
     //   $ ls '/tmp'
     //   $ ls $TEMP_DIR
-    fn parse_argument(&mut self) -> Option<Argument>{
+    fn parse_argument(&mut self) -> Option<Argument> {
         self.skip_whitespace();
         match self.current.token_type {
             ShTokenType::Name => Some(Argument::Name(self.current.lexeme.clone())),
-            ShTokenType::SingleQuote =>
-                Some(Argument::Name(self.parse_quoted_string())),
+            ShTokenType::SingleQuote => Some(Argument::Name(self.parse_quoted_string())),
             ShTokenType::DollarSign => {
                 self.next_token();
-                Some(Argument::Variable(VariableLookup {name: self.current.lexeme.clone()}))
-            },
-            ShTokenType::BackTick =>
-                Some(Argument::SubShell(SubShellExpr {
-                    shell: self.collect_until(ShTokenType::BackTick)
-                })),
-            _ => None
+                Some(Argument::Variable(VariableLookup {
+                    name: self.current.lexeme.clone(),
+                }))
+            }
+            ShTokenType::BackTick => Some(Argument::SubShell(SubShellExpr {
+                shell: self.collect_until(ShTokenType::BackTick),
+            })),
+            _ => None,
         }
     }
-    
-    fn skip_whitespace(&mut self)  {
+
+    fn skip_whitespace(&mut self) {
         while self.current.token_type == ShTokenType::WhiteSpace {
             self.next_token();
         }
@@ -163,10 +168,9 @@ impl Parser {
     fn collect_until(&mut self, end: ShTokenType) -> String {
         let mut ret: String = String::from("");
         self.next_token();
-        while self.current.token_type != end && 
-              self.current.token_type != ShTokenType::EndOfFile {
-           ret.push_str(&self.current.lexeme);
-           self.next_token();
+        while self.current.token_type != end && self.current.token_type != ShTokenType::EndOfFile {
+            ret.push_str(&self.current.lexeme);
+            self.next_token();
         }
         self.next_token(); // skip the trailing double quote
         self.skip_whitespace(); // skip any trailing whitespace
@@ -174,16 +178,19 @@ impl Parser {
     }
 
     fn next_token(&mut self) {
-        // this seems really wasteful but the borrow checker beat me up -- how do we change current 
+        // this seems really wasteful but the borrow checker beat me up -- how do we change current
         // and prev to be references?
         // println!("l: {} c: {:?}, p: {:?}", self.loc, self.current, self.prev);
         self.loc += 1;
         if self.loc >= self.token.len() {
-            self.current = Token { lexeme: "".to_string(), token_type: ShTokenType::EndOfFile};
+            self.current = Token {
+                lexeme: "".to_string(),
+                token_type: ShTokenType::EndOfFile,
+            };
         } else {
             self.current = self.token[self.loc].clone();
             if self.loc > 1 {
-                self.prev= self.token[self.loc - 1].clone();
+                self.prev = self.token[self.loc - 1].clone();
             }
         }
     }
