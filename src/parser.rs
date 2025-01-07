@@ -151,14 +151,6 @@ impl Parser {
     // On a single quote string we want to read every lexeme regardless
     // of the token type until we see another single quote.
     fn parse_quoted_string(&mut self) -> String {
-        // let mut ret: String = String::from("");
-        // self.next_token();
-        // while self.current.token_type != ShTokenType::SingleQuote {
-        //    ret.push_str(&self.current.lexeme);
-        //    self.next_token();
-        // }
-        // self.next_token(); // skip the trailing double quote
-        // self.skip_whitespace(); // skip any trailing whitespace
         self.collect_until(ShTokenType::SingleQuote)
     }
 
