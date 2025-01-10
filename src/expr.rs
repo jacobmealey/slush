@@ -4,6 +4,7 @@ use std::process;
 use std::process::Command;
 use std::process::Stdio;
 
+
 pub trait Evalable {
     // evaluate SOME command and provide a return value (0 is success, etc.)
     fn eval(&mut self) -> i32;
@@ -27,6 +28,64 @@ pub struct PipeLineExpr {
     pub pipeline: Vec<CommandExpr>,
 }
 
+// #[derive(Debug)]
+// pub struct AndIfLeaf {
+//     pub left: PipeLineExpr,
+//     pub right: PipeLineExpr,
+// }
+
+
+#[derive(Debug)]
+pub enum AndOrNode {
+    Pipeline(Box<PipeLineExpr>),
+    Andif(Box<AndIf>),
+    Orif(Box<OrIf>)
+}
+
+impl AndOrNode{
+    fn eval(&mut self) -> i32 {
+       match self {
+           AndOrNode::Pipeline(pl) => pl.eval(),
+           AndOrNode::Andif(and) => and.eval(),
+           AndOrNode::Orif(or) => or.eval(),
+       }
+    }
+}
+
+#[derive(Debug)]
+pub struct OrIf {
+    left: AndOrNode,
+    right: AndOrNode
+}
+
+impl OrIf {
+    fn eval(&mut self) -> i32 {
+        let ll = self.left.eval();
+        if ll != 0 {
+            return self.right.eval();
+        }
+        ll
+    }
+}
+
+#[derive(Debug)]
+pub struct AndIf {
+    left: AndOrNode,
+    right: AndOrNode
+}
+
+impl AndIf {
+    fn eval(&mut self) -> i32 {
+        let ll = self.left.eval();
+        let rr = self.right.eval();
+        if ll == 0 && rr == 0 {
+            return ll;
+        }
+        rr
+    }
+}
+
+// pub struct And IF
 #[derive(Debug)]
 pub struct AssignmentExpr {
     pub key: String,
@@ -135,6 +194,7 @@ impl PipeLineExpr {
             .expect("Couldn't get exit code from previous job")
     }
 }
+
 
 #[derive(Debug)]
 pub enum Argument {

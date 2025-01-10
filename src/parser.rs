@@ -41,6 +41,12 @@ impl Parser {
         self.parse_pipeline();
     }
 
+    // the results are a left-associative no precedence 
+    // list of and / or expressions. 
+    fn parse_andor_list(&mut self) {
+       let  
+    }
+
     fn parse_pipeline(&mut self) {
         let mut pipeline: Vec<CommandExpr> = Vec::new();
         pipeline.push(match self.parse_command() {
