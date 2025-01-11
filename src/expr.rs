@@ -223,13 +223,13 @@ impl Argument {
     }
 }
 
-#[derive(Debug)]
-pub enum Expr {
-    //CommandExpr(CommandExpr),
-    PipeLineExpr(PipeLineExpr),
-    AssignmentExpr(AssignmentExpr),
-    //SubShellExpr(SubShellExpr)
-}
+// #[derive(Debug)]
+// pub enum Expr {
+//     //CommandExpr(CommandExpr),
+//     PipeLineExpr(PipeLineExpr),
+//     AssignmentExpr(AssignmentExpr),
+//     //SubShellExpr(SubShellExpr)
+// }
 
 fn get_variable(var: String) -> String {
     env::var(var).expect("")

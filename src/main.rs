@@ -1,7 +1,5 @@
 use std::io::{self, BufRead, Write};
 
-use crate::expr::Evalable;
-use crate::expr::Expr;
 use crate::parser::tokenizer;
 mod expr;
 mod parser;

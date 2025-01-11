@@ -2,12 +2,12 @@ pub mod tokenizer;
 use crate::expr::Argument;
 use crate::expr::AssignmentExpr;
 use crate::expr::CommandExpr;
-use crate::expr::Expr;
 use crate::expr::PipeLineExpr;
 use crate::expr::SubShellExpr;
 use crate::expr::VariableLookup;
 use crate::tokenizer::{tokens, ShTokenType, Token};
 use crate::expr::AndIf;
+use crate::expr::OrIf;
 use crate::expr::AndOrNode;
 
 pub struct Parser {
@@ -46,12 +46,21 @@ impl Parser {
     // the results are a left-associative no precedence 
     // list of and / or expressions. 
     fn parse_andor_list(&mut self) {
-        println!("here we is");
         let left = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
         if self.current_is(ShTokenType::AndIf) {
             self.consume(ShTokenType::AndIf);
             let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
             self.exprs.push(AndOrNode::Andif(Box::new(AndIf{left, right})));
+            return;
+        }
+        // these feels yucky - how do we get these two nearly identical blocks 
+        self.skip_whitespace();
+        if self.current_is(ShTokenType::OrIf) {
+            self.consume(ShTokenType::OrIf);
+            println!("huh?");
+            self.skip_whitespace();
+            let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
+            self.exprs.push(AndOrNode::Orif(Box::new(OrIf{left, right})));
             return;
         }
         self.exprs.push(left);
@@ -104,13 +113,14 @@ impl Parser {
         let mut command = CommandExpr {
             command: command_name,
             arguments: Vec::new(),
-            assignment: assignment
+            assignment
         };
         while self.current.token_type != ShTokenType::EndOfFile
             && self.current.token_type != ShTokenType::NewLine
             && self.current.token_type != ShTokenType::Pipe
             && self.current.token_type != ShTokenType::SemiColon
             && self.current.token_type != ShTokenType::AndIf
+            && self.current.token_type != ShTokenType::OrIf
         {
             self.next_token();
             match self.parse_argument() {
