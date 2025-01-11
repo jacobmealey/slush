@@ -7,10 +7,12 @@ use crate::expr::PipeLineExpr;
 use crate::expr::SubShellExpr;
 use crate::expr::VariableLookup;
 use crate::tokenizer::{tokens, ShTokenType, Token};
+use crate::expr::AndIf;
+use crate::expr::AndOrNode;
 
 pub struct Parser {
     token: Vec<Token>,
-    pub exprs: Vec<Expr>,
+    pub exprs: Vec<AndOrNode>,
     current: Token,
     prev: Token,
     loc: usize,
@@ -38,22 +40,37 @@ impl Parser {
     }
 
     pub fn parse(&mut self) {
-        self.parse_pipeline();
+        self.parse_andor_list();
     }
 
     // the results are a left-associative no precedence 
     // list of and / or expressions. 
     fn parse_andor_list(&mut self) {
-       let  
+        println!("here we is");
+        let left = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
+        if self.current_is(ShTokenType::AndIf) {
+            self.consume(ShTokenType::AndIf);
+            let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
+            self.exprs.push(AndOrNode::Andif(Box::new(AndIf{left, right})));
+            return;
+        }
+        self.exprs.push(left);
+        // while self.consume(ShTokenType::AndIf) {
+        //     println!("huh?");
+        //     node.right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
+        // }
     }
 
-    fn parse_pipeline(&mut self) {
+    fn parse_pipeline(&mut self) -> PipeLineExpr {
         let mut pipeline: Vec<CommandExpr> = Vec::new();
         pipeline.push(match self.parse_command() {
             Ok(expr) => expr,
             Err(message) => {
-                println!("{}", message);
-                return;
+                CommandExpr {
+                    command: Argument::Name("echo".to_string()),
+                    arguments: Vec::from([Argument::Name(message)]),
+                    assignment: None,
+                }
             }
         });
         while self.current.token_type == ShTokenType::Pipe {
@@ -61,18 +78,19 @@ impl Parser {
             pipeline.push(match self.parse_command() {
                 Ok(expr) => expr,
                 Err(message) => {
-                    println!("{}", message);
-                    return;
+                    CommandExpr {
+                        command: Argument::Name("echo".to_string()),
+                        arguments: Vec::from([Argument::Name(message)]),
+                        assignment: None,
+                    }   
                 }
             });
         }
-        self.exprs
-            .push(Expr::PipeLineExpr(PipeLineExpr { pipeline }));
+        PipeLineExpr { pipeline }
     }
 
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
-        self.skip_whitespace();
-        self.parse_assignment();
+        let assignment = self.parse_assignment();
         let command_name = match self.parse_argument() {
             Some(a) => a,
             None => {
@@ -86,10 +104,13 @@ impl Parser {
         let mut command = CommandExpr {
             command: command_name,
             arguments: Vec::new(),
+            assignment: assignment
         };
         while self.current.token_type != ShTokenType::EndOfFile
             && self.current.token_type != ShTokenType::NewLine
             && self.current.token_type != ShTokenType::Pipe
+            && self.current.token_type != ShTokenType::SemiColon
+            && self.current.token_type != ShTokenType::AndIf
         {
             self.next_token();
             match self.parse_argument() {
@@ -110,7 +131,7 @@ impl Parser {
     // here VAR could be a valid standalone command, and we don't /know/ its an
     // assignment until we see the the '=' sign, if we don't we have to rewind to
     // the beginning. There must be a better way to do this?
-    fn parse_assignment(&mut self) {
+    fn parse_assignment(&mut self) -> Option<AssignmentExpr> {
         let current_location = self.loc;
         let mut key: String = String::from("");
         let mut val: Option<Argument> = None;
@@ -127,13 +148,14 @@ impl Parser {
             }
         }
         if let Some(argtype) = val {
-            self.exprs
-                .push(Expr::AssignmentExpr(AssignmentExpr { key, val: argtype }));
+            self.skip_whitespace();
+            return Some(AssignmentExpr { key, val: argtype });
         } else {
             self.loc = current_location;
             self.current = self.token[self.loc].clone();
         }
         self.skip_whitespace();
+        None
     }
 
     // Arguments can be A single quoteless string (Name), and quoted string or
@@ -183,6 +205,18 @@ impl Parser {
         ret
     }
 
+    fn current_is(&self, check: ShTokenType) -> bool {
+        self.current.token_type == check
+    }
+
+    fn consume(&mut self, token: ShTokenType) -> bool {
+        if self.current_is(token) {
+            self.next_token();
+            return true
+        }
+        false
+    }
+    
     fn next_token(&mut self) {
         // this seems really wasteful but the borrow checker beat me up -- how do we change current
         // and prev to be references?

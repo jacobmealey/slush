@@ -31,6 +31,7 @@ pub enum ShTokenType {
     AndIf,              // &&
     OrIf,               // ||
     Equal,              // =
+    SemiColon,          // ;
     Case,
     Do,
     Done,
@@ -60,7 +61,7 @@ pub struct Token {
 pub fn is_delemiter(c: char) -> bool {
     let delimeter_set = HashSet::from([
         ' ', '\t', '$', '\\', '\'', '(', ')', '{', '}', '[', ']', '!', '@', '*', '#', '?', '~',
-        '|', '>', '<', '`', '"', '&', '=', '\n',
+        '|', '>', '<', '`', '"', '&', '=', '\n', ';'
     ]);
     delimeter_set.contains(&c)
 }
@@ -175,6 +176,10 @@ pub fn tokens(st: &str) -> Vec<Token> {
                 lexeme: String::from(c),
                 token_type: ShTokenType::Equal,
             },
+            ';' => Token {
+                lexeme: String::from(c),
+                token_type: ShTokenType::SemiColon,
+            },
             '[' => {
                 let tok: Token;
                 if it.peek().is_some() && *it.peek().expect("No char?") == '[' {
@@ -274,7 +279,7 @@ pub fn tokens(st: &str) -> Vec<Token> {
         };
         tokens.push(token);
     }
-    // println!("{:?}", tokens);
+    println!("{:?}", tokens);
     tokens
 }
 

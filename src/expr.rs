@@ -21,6 +21,7 @@ pub struct VariableLookup {
 pub struct CommandExpr {
     pub command: Argument,
     pub arguments: Vec<Argument>,
+    pub assignment: Option<AssignmentExpr>,
 }
 
 #[derive(Debug)]
@@ -42,20 +43,27 @@ pub enum AndOrNode {
     Orif(Box<OrIf>)
 }
 
-impl AndOrNode{
-    fn eval(&mut self) -> i32 {
+impl AndOrNode {
+    pub fn eval(&mut self) -> i32 {
        match self {
            AndOrNode::Pipeline(pl) => pl.eval(),
            AndOrNode::Andif(and) => and.eval(),
            AndOrNode::Orif(or) => or.eval(),
        }
     }
+
+    pub fn run_with_out(&mut self, out: &mut String) -> i32{
+        match self {
+            AndOrNode::Pipeline(pl) => pl.run_with_out(out),
+            _ => { out.push_str("boogy"); 0}
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct OrIf {
-    left: AndOrNode,
-    right: AndOrNode
+    pub left: AndOrNode,
+    pub right: AndOrNode
 }
 
 impl OrIf {
@@ -66,19 +74,20 @@ impl OrIf {
         }
         ll
     }
+
 }
 
 #[derive(Debug)]
 pub struct AndIf {
-    left: AndOrNode,
-    right: AndOrNode
+    pub left: AndOrNode,
+    pub right: AndOrNode
 }
 
 impl AndIf {
     fn eval(&mut self) -> i32 {
         let ll = self.left.eval();
         let rr = self.right.eval();
-        if ll == 0 && rr == 0 {
+        if ll != 0 {
             return ll;
         }
         rr
@@ -104,11 +113,8 @@ impl SubShellExpr {
         let mut parser = Parser::new(&self.shell);
         let mut shell_output: String = Default::default();
         parser.parse();
-        for expr in parser.exprs {
-            match expr {
-                Expr::PipeLineExpr(mut pl) => pl.run_with_out(&mut shell_output),
-                Expr::AssignmentExpr(mut ass) => ass.eval(),
-            };
+        for mut expr in parser.exprs {
+            expr.run_with_out(&mut shell_output);
         }
         shell_output
     }
@@ -138,7 +144,11 @@ impl Evalable for PipeLineExpr {
         let mut prev_child: Option<process::Child> = None;
         let sz = self.pipeline.len();
         for (i, expr) in self.pipeline.iter_mut().enumerate() {
+            if let Some(ref mut ass) = expr.assignment {
+                ass.eval();
+            }
             let mut cmd = expr.build_command();
+
             if let Some(pchild) = prev_child {
                 cmd.stdin(Stdio::from(pchild.stdout.unwrap()));
             }
@@ -183,7 +193,7 @@ impl PipeLineExpr {
             .expect("No Child Process")
             .wait_with_output()
             .expect("Nothing");
-        *output = String::from_utf8(outie.stdout).unwrap();
+        output.push_str(&String::from_utf8(outie.stdout).unwrap());
         // trim trailing newlines if its an issue
         if output.ends_with('\n') {
             output.pop();
