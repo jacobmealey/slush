@@ -45,22 +45,23 @@ impl Parser {
     }
 
     // the results are a left-associative no precedence 
-    // list of and / or expressions.  did i make this right associateive? FML
-    // We need to make it a iterative approach?
+    // list of and / or expressions.  
     fn parse_andor_list(&mut self) -> AndOrNode {
-        let left = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
-        if self.current_is(ShTokenType::AndIf) {
-            self.consume(ShTokenType::AndIf);
-            let right = self.parse_andor_list();
-            return AndOrNode::Andif(Box::new(AndIf{left, right}));
-        }
-        // these feels yucky - how do we get these two nearly identical blocks 
-        self.skip_whitespace();
-        if self.current_is(ShTokenType::OrIf) {
-            self.consume(ShTokenType::OrIf);
+        let mut left = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
+        while self.current_is(ShTokenType::AndIf) || self.current_is(ShTokenType::OrIf) {
+            if self.current_is(ShTokenType::AndIf) {
+                self.consume(ShTokenType::AndIf);
+                let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
+                left = AndOrNode::Andif(Box::new(AndIf{left, right}));
+            }
+            // these feels yucky - how do we get these two nearly identical blocks 
             self.skip_whitespace();
-            let right = self.parse_andor_list();
-            return AndOrNode::Orif(Box::new(OrIf{left, right}));
+            if self.current_is(ShTokenType::OrIf) {
+                self.consume(ShTokenType::OrIf);
+                self.skip_whitespace();
+                let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
+                left = AndOrNode::Orif(Box::new(OrIf{left, right}));
+            }
         }
         left
     }
