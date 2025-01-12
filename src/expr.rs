@@ -121,7 +121,6 @@ impl SubShellExpr {
         parser.parse();
         for mut expr in parser.exprs {
             expr.set_output_capture(shell_output.clone());
-            // expr.run_with_out(&mut shell_output);
             expr.eval();
         }
         println!("shell output {:?}", shell_output);
@@ -182,7 +181,6 @@ impl Evalable for PipeLineExpr {
             if rcstr.borrow().ends_with('\n') {
                 rcstr.borrow_mut().pop();
             }
-            println!("rcstr: {:?}", rcstr);
             exit_status = outie.status.code().expect("Couldn't get exit code from prev job");
         } else {
             let status = prev_child.expect("No such previous child").wait().unwrap();

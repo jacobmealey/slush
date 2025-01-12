@@ -180,6 +180,8 @@ impl Parser {
                     name: self.current.lexeme.clone(),
                 }))
             }
+            // this logic is not right - and breaks if you do something like:
+            //      `echo `which ls``
             ShTokenType::BackTick => Some(Argument::SubShell(SubShellExpr {
                 shell: self.collect_until(ShTokenType::BackTick),
             })),
