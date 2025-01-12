@@ -123,7 +123,6 @@ impl SubShellExpr {
             expr.set_output_capture(shell_output.clone());
             expr.eval();
         }
-        println!("shell output {:?}", shell_output);
         let x = shell_output.borrow().clone(); x
     }
 }

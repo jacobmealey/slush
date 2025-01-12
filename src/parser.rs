@@ -45,7 +45,8 @@ impl Parser {
     }
 
     // the results are a left-associative no precedence 
-    // list of and / or expressions. 
+    // list of and / or expressions.  did i make this right associateive? FML
+    // We need to make it a iterative approach?
     fn parse_andor_list(&mut self) -> AndOrNode {
         let left = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
         if self.current_is(ShTokenType::AndIf) {
