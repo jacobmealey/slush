@@ -64,10 +64,6 @@ impl Parser {
             return;
         }
         self.exprs.push(left);
-        // while self.consume(ShTokenType::AndIf) {
-        //     println!("huh?");
-        //     node.right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
-        // }
     }
 
     fn parse_pipeline(&mut self) -> PipeLineExpr {
@@ -95,7 +91,7 @@ impl Parser {
                 }
             });
         }
-        PipeLineExpr { pipeline }
+        PipeLineExpr { pipeline, capture_out: None }
     }
 
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
@@ -113,7 +109,7 @@ impl Parser {
         let mut command = CommandExpr {
             command: command_name,
             arguments: Vec::new(),
-            assignment
+            assignment,
         };
         while self.current.token_type != ShTokenType::EndOfFile
             && self.current.token_type != ShTokenType::NewLine

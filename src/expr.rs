@@ -3,6 +3,8 @@ use std::env;
 use std::process;
 use std::process::Command;
 use std::process::Stdio;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 
 pub trait Evalable {
@@ -27,14 +29,8 @@ pub struct CommandExpr {
 #[derive(Debug)]
 pub struct PipeLineExpr {
     pub pipeline: Vec<CommandExpr>,
+    pub capture_out: Option<Rc<RefCell<String>>>
 }
-
-// #[derive(Debug)]
-// pub struct AndIfLeaf {
-//     pub left: PipeLineExpr,
-//     pub right: PipeLineExpr,
-// }
-
 
 #[derive(Debug)]
 pub enum AndOrNode {
@@ -52,10 +48,11 @@ impl AndOrNode {
        }
     }
 
-    pub fn run_with_out(&mut self, out: &mut String) -> i32{
+    pub fn set_output_capture(&mut self, capture: Rc<RefCell<String>>) {
         match self {
-            AndOrNode::Pipeline(pl) => pl.run_with_out(out),
-            _ => { out.push_str("boogy"); 0}
+            AndOrNode::Pipeline(pl) => pl.set_output_capture(capture),
+            AndOrNode::Andif(and) => and.set_output_capture(capture),
+            AndOrNode::Orif(or) => or.set_output_capture(capture),
         }
     }
 }
@@ -75,6 +72,10 @@ impl OrIf {
         ll
     }
 
+    pub fn set_output_capture(&mut self, capture: Rc<RefCell<String>>) {
+        self.left.set_output_capture(capture.clone());
+        self.right.set_output_capture(capture.clone());
+    }
 }
 
 #[derive(Debug)]
@@ -91,6 +92,11 @@ impl AndIf {
             return ll;
         }
         rr
+    }
+
+    pub fn set_output_capture(&mut self, capture: Rc<RefCell<String>>) {
+        self.left.set_output_capture(capture.clone()); // Line 123 !
+        self.right.set_output_capture(capture.clone());
     }
 }
 
@@ -111,12 +117,15 @@ pub struct SubShellExpr {
 impl SubShellExpr {
     pub fn stdout(&self) -> String {
         let mut parser = Parser::new(&self.shell);
-        let mut shell_output: String = Default::default();
+        let shell_output: Rc<RefCell<String>> = Default::default();
         parser.parse();
         for mut expr in parser.exprs {
-            expr.run_with_out(&mut shell_output);
+            expr.set_output_capture(shell_output.clone());
+            // expr.run_with_out(&mut shell_output);
+            expr.eval();
         }
-        shell_output
+        println!("shell output {:?}", shell_output);
+        let x = shell_output.borrow().clone(); x
     }
 }
 
@@ -152,7 +161,7 @@ impl Evalable for PipeLineExpr {
             if let Some(pchild) = prev_child {
                 cmd.stdin(Stdio::from(pchild.stdout.unwrap()));
             }
-            if i < sz - 1 {
+            if i < sz - 1 || self.capture_out.is_some() {
                 cmd.stdout(Stdio::piped());
             }
             prev_child = Some(match cmd.spawn() {
@@ -163,45 +172,31 @@ impl Evalable for PipeLineExpr {
                 }
             });
         }
-        let exit_status = prev_child.expect("No such previous child").wait().unwrap();
-        exit_status
-            .code()
-            .expect("Couldn't get exit code from previous job")
+        let exit_status: i32; 
+        if let Some(rcstr) = &self.capture_out {
+            let outie = prev_child
+                .expect("No Child Process")
+                .wait_with_output()
+                .expect("Nothing");
+            rcstr.borrow_mut().push_str(&String::from_utf8(outie.stdout.clone()).unwrap());
+            if rcstr.borrow().ends_with('\n') {
+                rcstr.borrow_mut().pop();
+            }
+            println!("rcstr: {:?}", rcstr);
+            exit_status = outie.status.code().expect("Couldn't get exit code from prev job");
+        } else {
+            let status = prev_child.expect("No such previous child").wait().unwrap();
+            exit_status = status 
+                .code()
+                .expect("Couldn't get exit code from previous job");
+        }
+        exit_status 
     }
 }
 
 impl PipeLineExpr {
-    // how to unduplicated
-    fn run_with_out(&mut self, output: &mut String) -> i32 {
-        let mut prev_child: Option<process::Child> = None;
-        for expr in self.pipeline.iter_mut() {
-            let mut cmd = expr.build_command();
-            if let Some(pchild) = prev_child {
-                cmd.stdin(Stdio::from(pchild.stdout.unwrap()));
-            }
-            cmd.stdout(Stdio::piped());
-            prev_child = Some(match cmd.spawn() {
-                Ok(c) => c,
-                Err(v) => {
-                    println!("{}", v);
-                    return 2;
-                }
-            });
-        }
-
-        let outie = prev_child
-            .expect("No Child Process")
-            .wait_with_output()
-            .expect("Nothing");
-        output.push_str(&String::from_utf8(outie.stdout).unwrap());
-        // trim trailing newlines if its an issue
-        if output.ends_with('\n') {
-            output.pop();
-        }
-        outie
-            .status
-            .code()
-            .expect("Couldn't get exit code from previous job")
+    pub fn set_output_capture(&mut self, capture: Rc<RefCell<String>>) {
+        self.capture_out = Some(capture);
     }
 }
 
