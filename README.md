@@ -17,8 +17,8 @@
   - [ ] while
   - [ ] for
 - [ ] Lists
-  - [ ] And-if (`||`)
-  - [ ] Or-if (`&&`)
+  - [x] And-if (`||`)
+  - [x] Or-if (`&&`)
 - [ ] Background process control
 - [ ] Alias
 - [ ] essential built-ins
