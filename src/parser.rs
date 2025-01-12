@@ -40,30 +40,28 @@ impl Parser {
     }
 
     pub fn parse(&mut self) {
-        self.parse_andor_list();
+        let expr = self.parse_andor_list();
+        self.exprs.push(expr);
     }
 
     // the results are a left-associative no precedence 
     // list of and / or expressions. 
-    fn parse_andor_list(&mut self) {
+    fn parse_andor_list(&mut self) -> AndOrNode {
         let left = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
         if self.current_is(ShTokenType::AndIf) {
             self.consume(ShTokenType::AndIf);
-            let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
-            self.exprs.push(AndOrNode::Andif(Box::new(AndIf{left, right})));
-            return;
+            let right = self.parse_andor_list();
+            return AndOrNode::Andif(Box::new(AndIf{left, right}));
         }
         // these feels yucky - how do we get these two nearly identical blocks 
         self.skip_whitespace();
         if self.current_is(ShTokenType::OrIf) {
             self.consume(ShTokenType::OrIf);
-            println!("huh?");
             self.skip_whitespace();
-            let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
-            self.exprs.push(AndOrNode::Orif(Box::new(OrIf{left, right})));
-            return;
+            let right = self.parse_andor_list();
+            return AndOrNode::Orif(Box::new(OrIf{left, right}));
         }
-        self.exprs.push(left);
+        left
     }
 
     fn parse_pipeline(&mut self) -> PipeLineExpr {
