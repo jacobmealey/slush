@@ -238,7 +238,9 @@ impl Parser {
 
 
 mod test {
+    #[allow(unused_imports)]
     use super::*;
+    #[allow(unused_imports)]
     use crate::parser::Parser;
     #[test]
     fn basic_command() {
@@ -248,18 +250,18 @@ mod test {
             AndOrNode::Pipeline(
                 Box::new(PipeLineExpr {
                     pipeline: Vec::from([
-                                  CommandExpr { 
-                                      command: Argument::Name("ls".to_string()),
-                                      arguments: Vec::from([
-                                          Argument::Name("/var".to_string()),
-                                          Argument::Name("/tmp".to_string())
-                                      ]),
-                                      assignment: None
-                                  }
+                      CommandExpr { 
+                          command: Argument::Name("ls".to_string()),
+                          arguments: Vec::from([
+                              Argument::Name("/var".to_string()),
+                              Argument::Name("/tmp".to_string())
+                          ]),
+                          assignment: None
+                      }
                     ]),
                     capture_out: None
                 }
-                ))
+            ))
         ]);
         parser.parse();
         for (i, expr) in parser.exprs.into_iter().enumerate() {
