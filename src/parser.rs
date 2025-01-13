@@ -81,16 +81,21 @@ impl Parser {
 
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
         let assignment = self.parse_assignment();
+        let mut err: String = "".to_string();
         let command_name = match self.parse_argument() {
             Some(a) => a,
             None => {
-                return Err(format!(
+                err = format!(
                     "Syntax error: Expected some command, instead found '{:?}'.",
                     self.current
-                ));
+                );
+                Argument::Name("".to_string())
             }
         };
 
+        if err.len() > 0 && assignment.is_none() {
+            return Err(err);
+        }
         let mut command = CommandExpr {
             command: command_name,
             arguments: Vec::new(),

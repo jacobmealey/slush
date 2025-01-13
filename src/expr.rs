@@ -155,6 +155,10 @@ impl Evalable for PipeLineExpr {
                 ass.eval();
             }
 
+            match &expr.command {
+                Argument::Name(arg) => { if arg.len() == 0 { continue; } }
+                _ => {}
+            }
             let mut cmd = expr.build_command();
 
             if let Some(pchild) = prev_child {
@@ -171,7 +175,7 @@ impl Evalable for PipeLineExpr {
                 }
             });
         }
-        let exit_status: i32; 
+        let mut exit_status: i32 = 0; 
         if let Some(rcstr) = &self.capture_out {
             let outie = prev_child
                 .expect("No Child Process")
@@ -182,7 +186,7 @@ impl Evalable for PipeLineExpr {
                 rcstr.borrow_mut().pop();
             }
             exit_status = outie.status.code().expect("Couldn't get exit code from prev job");
-        } else {
+        } else if prev_child.is_some()  {
             let status = prev_child.expect("No such previous child").wait().unwrap();
             exit_status = status 
                 .code()
