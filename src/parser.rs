@@ -40,18 +40,20 @@ impl Parser {
     }
 
     pub fn parse(&mut self) {
-        let expr = self.parse_andor_list();
-        self.exprs.push(expr);
+         match self.parse_andor_list() {
+            Ok(expr) => { self.exprs.push(expr) },
+            Err(strn) => { println!("{}", strn) }
+        };
     }
 
     // the results are a left-associative no precedence 
     // list of and / or expressions.  
-    fn parse_andor_list(&mut self) -> AndOrNode {
-        let mut left = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
+    fn parse_andor_list(&mut self) -> Result<AndOrNode, String> {
+        let mut left = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
         while self.current_is(ShTokenType::AndIf) || self.current_is(ShTokenType::OrIf) {
             if self.current_is(ShTokenType::AndIf) {
                 self.consume(ShTokenType::AndIf);
-                let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
+                let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
                 left = AndOrNode::Andif(Box::new(AndIf{left, right}));
             }
             // these feels yucky - how do we get these two nearly identical blocks 
@@ -59,39 +61,22 @@ impl Parser {
             if self.current_is(ShTokenType::OrIf) {
                 self.consume(ShTokenType::OrIf);
                 self.skip_whitespace();
-                let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()));
+                let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
                 left = AndOrNode::Orif(Box::new(OrIf{left, right}));
             }
         }
-        left
+        Ok(left)
     }
 
-    fn parse_pipeline(&mut self) -> PipeLineExpr {
+    fn parse_pipeline(&mut self) -> Result<PipeLineExpr, String> {
         let mut pipeline: Vec<CommandExpr> = Vec::new();
-        pipeline.push(match self.parse_command() {
-            Ok(expr) => expr,
-            Err(message) => {
-                CommandExpr {
-                    command: Argument::Name("echo".to_string()),
-                    arguments: Vec::from([Argument::Name(message)]),
-                    assignment: None,
-                }
-            }
-        });
+        pipeline.push(self.parse_command()?);
+
         while self.current.token_type == ShTokenType::Pipe {
             self.next_token();
-            pipeline.push(match self.parse_command() {
-                Ok(expr) => expr,
-                Err(message) => {
-                    CommandExpr {
-                        command: Argument::Name("echo".to_string()),
-                        arguments: Vec::from([Argument::Name(message)]),
-                        assignment: None,
-                    }   
-                }
-            });
+            pipeline.push(self.parse_command()?);
         }
-        PipeLineExpr { pipeline, capture_out: None }
+        Ok(PipeLineExpr { pipeline, capture_out: None })
     }
 
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
