@@ -94,7 +94,7 @@ impl Parser {
             }
         };
 
-        if err.len() > 0 && assignment.is_none() {
+        if err.is_empty() && assignment.is_none() {
             return Err(err);
         }
         let mut command = CommandExpr {

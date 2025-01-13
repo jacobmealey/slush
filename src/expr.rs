@@ -155,10 +155,12 @@ impl Evalable for PipeLineExpr {
                 ass.eval();
             }
 
-            match &expr.command {
-                Argument::Name(arg) => { if arg.len() == 0 { continue; } }
-                _ => {}
+            if let Argument::Name(arg) = &expr.command {
+                if arg.is_empty() {
+                    continue;
+                }
             }
+
             let mut cmd = expr.build_command();
 
             if let Some(pchild) = prev_child {
