@@ -154,6 +154,7 @@ impl Evalable for PipeLineExpr {
             if let Some(ref mut ass) = expr.assignment {
                 ass.eval();
             }
+
             let mut cmd = expr.build_command();
 
             if let Some(pchild) = prev_child {

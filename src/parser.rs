@@ -138,6 +138,7 @@ impl Parser {
                 });
             }
         }
+        self.next_token();
         if let Some(argtype) = val {
             self.skip_whitespace();
             return Some(AssignmentExpr { key, val: argtype });
