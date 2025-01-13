@@ -12,27 +12,27 @@ pub trait Evalable {
     fn eval(&mut self) -> i32;
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct VariableLookup {
     pub name: String,
 }
 
 // How do we made these outputs streams? it would be nice to have it feed
 // between two child CommandExprs as they are creating them...
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct CommandExpr {
     pub command: Argument,
     pub arguments: Vec<Argument>,
     pub assignment: Option<AssignmentExpr>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct PipeLineExpr {
     pub pipeline: Vec<CommandExpr>,
     pub capture_out: Option<Rc<RefCell<String>>>
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum AndOrNode {
     Pipeline(Box<PipeLineExpr>),
     Andif(Box<AndIf>),
@@ -57,7 +57,7 @@ impl AndOrNode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct OrIf {
     pub left: AndOrNode,
     pub right: AndOrNode
@@ -78,7 +78,7 @@ impl OrIf {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct AndIf {
     pub left: AndOrNode,
     pub right: AndOrNode
@@ -101,7 +101,7 @@ impl AndIf {
 }
 
 // pub struct And IF
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct AssignmentExpr {
     pub key: String,
     pub val: Argument,
@@ -109,7 +109,7 @@ pub struct AssignmentExpr {
 
 // Subshell is simply a wrapper around a string which can be fed into a
 // parser, evaluated and stdout returned.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct SubShellExpr {
     pub shell: String,
 }
@@ -205,7 +205,7 @@ impl PipeLineExpr {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Argument {
     Name(String),
     Variable(VariableLookup),

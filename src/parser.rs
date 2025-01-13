@@ -94,7 +94,7 @@ impl Parser {
             }
         };
 
-        if err.is_empty() && assignment.is_none() {
+        if err.is_empty() && assignment.is_some() {
             return Err(err);
         }
         let mut command = CommandExpr {
@@ -232,6 +232,38 @@ impl Parser {
             if self.loc > 1 {
                 self.prev = self.token[self.loc - 1].clone();
             }
+        }
+    }
+}
+
+
+mod test {
+    use super::*;
+    use crate::parser::Parser;
+    #[test]
+    fn basic_command() {
+        let line = "ls /var /tmp";
+        let mut parser = Parser::new(&line);
+        let golden_set = Vec::from([
+            AndOrNode::Pipeline(
+                Box::new(PipeLineExpr {
+                    pipeline: Vec::from([
+                                  CommandExpr { 
+                                      command: Argument::Name("ls".to_string()),
+                                      arguments: Vec::from([
+                                          Argument::Name("/var".to_string()),
+                                          Argument::Name("/tmp".to_string())
+                                      ]),
+                                      assignment: None
+                                  }
+                    ]),
+                    capture_out: None
+                }
+                ))
+        ]);
+        parser.parse();
+        for (i, expr) in parser.exprs.into_iter().enumerate() {
+            assert!(golden_set[i].eq(&expr));
         }
     }
 }
