@@ -73,13 +73,14 @@ impl Parser {
         pipeline.push(self.parse_command()?);
 
         while self.current.token_type == ShTokenType::Pipe {
-            self.next_token();
+            self.consume(ShTokenType::Pipe);
             pipeline.push(self.parse_command()?);
         }
         Ok(PipeLineExpr { pipeline, capture_out: None })
     }
 
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
+        self.skip_whitespace();
         let assignment = self.parse_assignment();
         let mut err: String = "".to_string();
         let command_name = match self.parse_argument() {
