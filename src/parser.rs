@@ -361,4 +361,77 @@ mod test {
         assert!(!parser.err.is_empty());
         assert_eq!(parser.exprs.len(), 0);
     }
+
+    #[test]
+    fn happy_path_subshell(){
+        let line = "echo `which ls`";
+        let mut parser = Parser::new(&line);
+        let golden_set = Vec::from([
+            AndOrNode::Pipeline(
+                Box::new(PipeLineExpr {
+                    pipeline: Vec::from([
+                      CommandExpr {
+                          command: Argument::Name("echo".to_string()),
+                          arguments: Vec::from([Argument::SubShell(SubShellExpr {
+                              shell: "which ls".to_string()
+                          })]),
+                          assignment: None
+                      }
+                    ]),
+                    capture_out: None
+                }
+            ))
+        ]);
+        parser.parse();
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn undelimited_subshell() {
+        let line = "ls `";
+        let mut parser = Parser::new(&line);
+        parser.parse();
+        // We don't care what the error is just that there is one
+        assert!(!parser.err.is_empty());
+        assert_eq!(parser.exprs.len(), 0);
+    }
+
+    #[test]
+    fn multi_line_command() {
+        let line = "echo 'hello world' \n echo 'goodbye world'";
+        let mut parser = Parser::new(&line);
+        let golden_set = Vec::from([
+            AndOrNode::Pipeline(
+                Box::new(PipeLineExpr {
+                    pipeline: Vec::from([
+                      CommandExpr {
+                          command: Argument::Name("echo".to_string()),
+                          arguments: Vec::from([Argument::Name("hello world".to_string())]),
+                          assignment: None
+                      }
+                    ]),
+                    capture_out: None
+                }
+            )),
+            AndOrNode::Pipeline(
+                Box::new(PipeLineExpr {
+                    pipeline: Vec::from([
+                      CommandExpr {
+                          command: Argument::Name("echo".to_string()),
+                          arguments: Vec::from([Argument::Name("goodbye world".to_string())]),
+                          assignment: None
+                      }
+                    ]),
+                    capture_out: None
+                }
+            ))
+        ]);
+        parser.parse();
+        assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
 }
