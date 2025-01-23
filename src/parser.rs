@@ -16,6 +16,7 @@ pub struct Parser {
     current: Token,
     prev: Token,
     loc: usize,
+    pub err: String,
 }
 
 impl Parser {
@@ -32,6 +33,7 @@ impl Parser {
                 token_type: ShTokenType::EndOfFile,
             },
             loc: 0,
+            err: "".to_string(),
         };
         if !parser.token.is_empty() {
             parser.current = parser.token[0].clone();
@@ -40,9 +42,10 @@ impl Parser {
     }
 
     pub fn parse(&mut self) {
-         match self.parse_andor_list() {
+        self.err = "".to_string();
+        match self.parse_andor_list() {
             Ok(expr) => { self.exprs.push(expr) },
-            Err(strn) => { println!("{}", strn) }
+            Err(strn) => { self.err = strn; }
         };
     }
 
@@ -81,7 +84,7 @@ impl Parser {
 
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
         self.skip_whitespace();
-        let assignment = self.parse_assignment();
+        let assignment = self.parse_assignment()?;
         let mut err: String = "".to_string();
         let command_name = match self.parse_argument() {
             Some(a) => a,
@@ -128,7 +131,7 @@ impl Parser {
     // here VAR could be a valid standalone command, and we don't /know/ its an
     // assignment until we see the the '=' sign, if we don't we have to rewind to
     // the beginning. There must be a better way to do this?
-    fn parse_assignment(&mut self) -> Option<AssignmentExpr> {
+    fn parse_assignment(&mut self) -> Result<Option<AssignmentExpr>, String> {
         let current_location = self.loc;
         let mut key: String = String::from("");
         let mut val: Option<Argument> = None;
@@ -147,13 +150,16 @@ impl Parser {
         self.next_token();
         if let Some(argtype) = val {
             self.skip_whitespace();
-            return Some(AssignmentExpr { key, val: argtype });
-        } else {
+            return Ok(Some(AssignmentExpr { key, val: argtype }));
+        } else if current_location < self.token.len() {
             self.loc = current_location;
             self.current = self.token[self.loc].clone();
+        } else {
+            return Err(format!("Syntax error: Unexpected end of file after '{}'",
+                        self.prev.lexeme));
         }
         self.skip_whitespace();
-        None
+        Ok(None)
     }
 
     // Arguments can be A single quoteless string (Name), and quoted string or
@@ -223,13 +229,16 @@ impl Parser {
         // println!("l: {} c: {:?}, p: {:?}", self.loc, self.current, self.prev);
         self.loc += 1;
         if self.loc >= self.token.len() {
+            if self.loc > 0 && self.loc - 1 < self.token.len() {
+                self.prev = self.token[self.loc - 1].clone();
+            }
             self.current = Token {
                 lexeme: "".to_string(),
                 token_type: ShTokenType::EndOfFile,
             };
         } else {
             self.current = self.token[self.loc].clone();
-            if self.loc > 1 {
+            if self.loc > 0 {
                 self.prev = self.token[self.loc - 1].clone();
             }
         }
@@ -320,5 +329,15 @@ mod test {
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
         }
+    }
+
+    #[test]
+    fn unexpected_eof() {
+        let line = "ls |";
+        let mut parser = Parser::new(&line);
+        parser.parse();
+        // We don't care what the error is just that there is one
+        assert!(!parser.err.is_empty());
+        assert_eq!(parser.exprs.len(), 0);
     }
 }

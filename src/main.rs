@@ -15,8 +15,13 @@ fn repl() {
         let line = stdin.lock().lines().next().unwrap().unwrap();
         let mut parser = parser::Parser::new(&line);
         parser.parse();
-        for mut expr in parser.exprs {
-            code = expr.eval();
+        if !parser.err.is_empty() {
+            println!("{}", parser.err);
+            continue;
+        } else {
+            for mut expr in parser.exprs {
+                code = expr.eval();
+            }
         }
     }
 }
