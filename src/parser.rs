@@ -185,9 +185,20 @@ impl Parser {
             ShTokenType::SingleQuote => Ok(Some(Argument::Name(self.parse_quoted_string()?))),
             ShTokenType::DollarSign => {
                 self.next_token();
-                Ok(Some(Argument::Variable(VariableLookup {
-                    name: self.current.lexeme.clone(),
-                })))
+                match self.current.token_type {
+                    ShTokenType::Name => {
+                        Ok(Some(Argument::Variable(VariableLookup {
+                            name: self.current.lexeme.clone(),
+                        }))
+                        )
+                    },
+                    ShTokenType::LeftParen => {
+                        Ok(Some(Argument::SubShell(SubShellExpr {
+                            shell: self.collect_until(ShTokenType::RightParen)?
+                        })))
+                    }
+                    _ => Err("Exepected some value after '$'".to_string())
+                }
             }
             // this logic is not right - and breaks if you do something like:
             //      `echo `which ls``
@@ -405,6 +416,35 @@ mod test {
                 capture_out: None,
             })),
         ]);
+        parser.parse();
+        assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn tes_ls_and_pwd() {
+        let line = "ls && pwd";
+        let mut parser = Parser::new(&line);
+        let golden_set = Vec::from([AndOrNode::Andif(Box::new(AndIf {
+            left: AndOrNode::Pipeline(Box::new(PipeLineExpr {
+                pipeline: Vec::from([CommandExpr {
+                    command: Argument::Name("ls".to_string()),
+                    arguments: Vec::new(),
+                    assignment: None,
+                }]),
+                capture_out: None,
+            })),
+            right: AndOrNode::Pipeline(Box::new(PipeLineExpr {
+                pipeline: Vec::from([CommandExpr {
+                    command: Argument::Name("pwd".to_string()),
+                    arguments: Vec::new(),
+                    assignment: None,
+                }]),
+                capture_out: None,
+            })),
+        }))]);
         parser.parse();
         assert!(parser.err.is_empty());
         for (i, expr) in golden_set.into_iter().enumerate() {
