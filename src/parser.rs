@@ -237,7 +237,7 @@ impl Parser {
         Ok(ret)
     }
 
-    // For braces and parents
+    // For braces and parents assumes you have already ingested left
     fn collect_matching(
         &mut self,
         left: ShTokenType,
@@ -245,7 +245,7 @@ impl Parser {
     ) -> Result<String, String> {
         let mut count = 1;
         let mut ret: String = String::new();
-        while count != 0 {
+        while count != 0 && !self.current_is(right) {
             self.next_token();
             if self.current_is(ShTokenType::EndOfFile) {
                 return Err(format!(
@@ -478,6 +478,29 @@ mod test {
         }))]);
         parser.parse();
         assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn subshell_subshell() {
+        let line = "echo $(echo $(echo 'hello world'))";
+        let mut parser = Parser::new(&line);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CommandExpr {
+                command: Argument::Name("echo".to_string()),
+                arguments: Vec::from([Argument::SubShell(SubShellExpr {
+                    shell: "echo $(echo 'hello world')".to_string(),
+                })]),
+                assignment: None,
+            }]),
+            capture_out: None,
+        }))]);
+        parser.parse();
+        assert!(parser.err.is_empty());
+        println!("{:?}", parser.exprs);
+        println!("{:?}", golden_set);
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
         }
