@@ -200,7 +200,6 @@ impl Parser {
     // On a single quote string we want to read every lexeme regardless
     // of the token type until we see another single quote.
     fn parse_quoted_string(&mut self) -> Result<String, String> {
-        println!("PArsing a quoted string");
         match self.collect_until(ShTokenType::SingleQuote) {
             Ok(s) => Ok(s),
             Err(_) => Err("Syntax error: unterminated string".to_string()),
