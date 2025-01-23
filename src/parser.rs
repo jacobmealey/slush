@@ -186,18 +186,14 @@ impl Parser {
             ShTokenType::DollarSign => {
                 self.next_token();
                 match self.current.token_type {
-                    ShTokenType::Name => {
-                        Ok(Some(Argument::Variable(VariableLookup {
-                            name: self.current.lexeme.clone(),
-                        }))
-                        )
-                    },
-                    ShTokenType::LeftParen => {
-                        Ok(Some(Argument::SubShell(SubShellExpr {
-                            shell: self.collect_until(ShTokenType::RightParen)?
-                        })))
-                    }
-                    _ => Err("Exepected some value after '$'".to_string())
+                    ShTokenType::Name => Ok(Some(Argument::Variable(VariableLookup {
+                        name: self.current.lexeme.clone(),
+                    }))),
+                    ShTokenType::LeftParen => Ok(Some(Argument::SubShell(SubShellExpr {
+                        shell: self
+                            .collect_matching(ShTokenType::LeftParen, ShTokenType::RightParen)?,
+                    }))),
+                    _ => Err("Exepected some value after '$'".to_string()),
                 }
             }
             // this logic is not right - and breaks if you do something like:
@@ -238,6 +234,41 @@ impl Parser {
             ));
         }
         self.skip_whitespace(); // skip any trailing whitespace
+        Ok(ret)
+    }
+
+    // For braces and parents
+    fn collect_matching(
+        &mut self,
+        left: ShTokenType,
+        right: ShTokenType,
+    ) -> Result<String, String> {
+        let mut count = 1;
+        let mut ret: String = String::new();
+        while count != 0 {
+            self.next_token();
+            if self.current_is(ShTokenType::EndOfFile) {
+                return Err(format!(
+                    "Syntax Error: Unexpected end of file, no matching '{:?}'",
+                    right
+                ));
+            }
+            ret.push_str(&self.current.lexeme);
+            // we want to push strings as is, because we don't want to falsely count lefts
+            // or rights that should syntacically be ignored!
+            // TODO: Should strings be handled by the tokenizer???
+            if self.current_is(ShTokenType::SingleQuote) {
+                ret.push_str(&self.collect_until(ShTokenType::SingleQuote)?);
+                ret.push_str(&self.current.lexeme);
+            }
+            count += if self.current.token_type == left {
+                1
+            } else if self.current.token_type == right {
+                -1
+            } else {
+                0
+            };
+        }
         Ok(ret)
     }
 
