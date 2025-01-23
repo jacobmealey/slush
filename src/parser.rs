@@ -264,8 +264,61 @@ mod test {
             ))
         ]);
         parser.parse();
-        for (i, expr) in parser.exprs.into_iter().enumerate() {
-            assert!(golden_set[i].eq(&expr));
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_only_ls() {
+        let line = "ls";
+        let mut parser = Parser::new(&line);
+        let golden_set = Vec::from([
+            AndOrNode::Pipeline(
+                Box::new(PipeLineExpr {
+                    pipeline: Vec::from([
+                      CommandExpr { 
+                          command: Argument::Name("ls".to_string()),
+                          arguments: Vec::new(),
+                          assignment: None
+                      }
+                    ]),
+                    capture_out: None
+                }
+            ))
+        ]);
+        parser.parse();
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_ls_pipe_wc() {
+        let line = "ls | wc";
+        let mut parser = Parser::new(&line);
+        let golden_set = Vec::from([
+            AndOrNode::Pipeline(
+                Box::new(PipeLineExpr {
+                    pipeline: Vec::from([
+                      CommandExpr { 
+                          command: Argument::Name("ls".to_string()),
+                          arguments: Vec::new(),
+                          assignment: None
+                      },
+                      CommandExpr { 
+                          command: Argument::Name("wc".to_string()),
+                          arguments: Vec::new(),
+                          assignment: None
+                      }
+                    ]),
+                    capture_out: None
+                }
+            ))
+        ]);
+        parser.parse();
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
         }
     }
 }
