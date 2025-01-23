@@ -1,11 +1,10 @@
 use crate::parser::Parser;
+use std::cell::RefCell;
 use std::env;
 use std::process;
 use std::process::Command;
 use std::process::Stdio;
-use std::cell::RefCell;
 use std::rc::Rc;
-
 
 pub trait Evalable {
     // evaluate SOME command and provide a return value (0 is success, etc.)
@@ -29,23 +28,23 @@ pub struct CommandExpr {
 #[derive(Debug, PartialEq)]
 pub struct PipeLineExpr {
     pub pipeline: Vec<CommandExpr>,
-    pub capture_out: Option<Rc<RefCell<String>>>
+    pub capture_out: Option<Rc<RefCell<String>>>,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum AndOrNode {
     Pipeline(Box<PipeLineExpr>),
     Andif(Box<AndIf>),
-    Orif(Box<OrIf>)
+    Orif(Box<OrIf>),
 }
 
 impl AndOrNode {
     pub fn eval(&mut self) -> i32 {
-       match self {
-           AndOrNode::Pipeline(pl) => pl.eval(),
-           AndOrNode::Andif(and) => and.eval(),
-           AndOrNode::Orif(or) => or.eval(),
-       }
+        match self {
+            AndOrNode::Pipeline(pl) => pl.eval(),
+            AndOrNode::Andif(and) => and.eval(),
+            AndOrNode::Orif(or) => or.eval(),
+        }
     }
 
     pub fn set_output_capture(&mut self, capture: Rc<RefCell<String>>) {
@@ -60,7 +59,7 @@ impl AndOrNode {
 #[derive(Debug, PartialEq)]
 pub struct OrIf {
     pub left: AndOrNode,
-    pub right: AndOrNode
+    pub right: AndOrNode,
 }
 
 impl OrIf {
@@ -81,7 +80,7 @@ impl OrIf {
 #[derive(Debug, PartialEq)]
 pub struct AndIf {
     pub left: AndOrNode,
-    pub right: AndOrNode
+    pub right: AndOrNode,
 }
 
 impl AndIf {
@@ -123,7 +122,8 @@ impl SubShellExpr {
             expr.set_output_capture(shell_output.clone());
             expr.eval();
         }
-        let x = shell_output.borrow().clone(); x
+        let x = shell_output.borrow().clone();
+        x
     }
 }
 
@@ -177,24 +177,29 @@ impl Evalable for PipeLineExpr {
                 }
             });
         }
-        let mut exit_status: i32 = 0; 
+        let mut exit_status: i32 = 0;
         if let Some(rcstr) = &self.capture_out {
             let outie = prev_child
                 .expect("No Child Process")
                 .wait_with_output()
                 .expect("Nothing");
-            rcstr.borrow_mut().push_str(&String::from_utf8(outie.stdout.clone()).unwrap());
+            rcstr
+                .borrow_mut()
+                .push_str(&String::from_utf8(outie.stdout.clone()).unwrap());
             if rcstr.borrow().ends_with('\n') {
                 rcstr.borrow_mut().pop();
             }
-            exit_status = outie.status.code().expect("Couldn't get exit code from prev job");
-        } else if prev_child.is_some()  {
+            exit_status = outie
+                .status
+                .code()
+                .expect("Couldn't get exit code from prev job");
+        } else if prev_child.is_some() {
             let status = prev_child.expect("No such previous child").wait().unwrap();
-            exit_status = status 
+            exit_status = status
                 .code()
                 .expect("Couldn't get exit code from previous job");
         }
-        exit_status 
+        exit_status
     }
 }
 
@@ -203,7 +208,6 @@ impl PipeLineExpr {
         self.capture_out = Some(capture);
     }
 }
-
 
 #[derive(Debug, PartialEq)]
 pub enum Argument {

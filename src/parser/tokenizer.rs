@@ -61,7 +61,7 @@ pub struct Token {
 pub fn is_delemiter(c: char) -> bool {
     let delimeter_set = HashSet::from([
         ' ', '\t', '$', '\\', '\'', '(', ')', '{', '}', '[', ']', '!', '@', '*', '#', '?', '~',
-        '|', '>', '<', '`', '"', '&', '=', '\n', ';'
+        '|', '>', '<', '`', '"', '&', '=', '\n', ';',
     ]);
     delimeter_set.contains(&c)
 }
@@ -279,7 +279,7 @@ pub fn tokens(st: &str) -> Vec<Token> {
         };
         tokens.push(token);
     }
-    
+
     tokens
 }
 

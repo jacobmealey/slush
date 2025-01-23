@@ -1,6 +1,6 @@
-use std::io::{self, BufRead, Write};
-use std::env;
 use crate::parser::tokenizer;
+use std::env;
+use std::io::{self, BufRead, Write};
 mod expr;
 mod parser;
 

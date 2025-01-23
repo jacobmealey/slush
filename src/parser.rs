@@ -1,14 +1,14 @@
 pub mod tokenizer;
+use crate::expr::AndIf;
+use crate::expr::AndOrNode;
 use crate::expr::Argument;
 use crate::expr::AssignmentExpr;
 use crate::expr::CommandExpr;
+use crate::expr::OrIf;
 use crate::expr::PipeLineExpr;
 use crate::expr::SubShellExpr;
 use crate::expr::VariableLookup;
 use crate::tokenizer::{tokens, ShTokenType, Token};
-use crate::expr::AndIf;
-use crate::expr::OrIf;
-use crate::expr::AndOrNode;
 
 pub struct Parser {
     token: Vec<Token>,
@@ -45,30 +45,32 @@ impl Parser {
         self.err = "".to_string();
         while self.current.token_type != ShTokenType::EndOfFile {
             match self.parse_andor_list() {
-                Ok(expr) => { self.exprs.push(expr) },
-                Err(strn) => { self.err += &strn; }
+                Ok(expr) => self.exprs.push(expr),
+                Err(strn) => {
+                    self.err += &strn;
+                }
             };
             self.next_token(); // skip a newline
         }
     }
 
-    // the results are a left-associative no precedence 
-    // list of and / or expressions.  
+    // the results are a left-associative no precedence
+    // list of and / or expressions.
     fn parse_andor_list(&mut self) -> Result<AndOrNode, String> {
         let mut left = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
         while self.current_is(ShTokenType::AndIf) || self.current_is(ShTokenType::OrIf) {
             if self.current_is(ShTokenType::AndIf) {
                 self.consume(ShTokenType::AndIf);
                 let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
-                left = AndOrNode::Andif(Box::new(AndIf{left, right}));
+                left = AndOrNode::Andif(Box::new(AndIf { left, right }));
             }
-            // these feels yucky - how do we get these two nearly identical blocks 
+            // these feels yucky - how do we get these two nearly identical blocks
             self.skip_whitespace();
             if self.current_is(ShTokenType::OrIf) {
                 self.consume(ShTokenType::OrIf);
                 self.skip_whitespace();
                 let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
-                left = AndOrNode::Orif(Box::new(OrIf{left, right}));
+                left = AndOrNode::Orif(Box::new(OrIf { left, right }));
             }
         }
         Ok(left)
@@ -78,12 +80,15 @@ impl Parser {
         let mut pipeline: Vec<CommandExpr> = Vec::new();
         pipeline.push(self.parse_command()?);
 
-        while self.current.token_type == ShTokenType::Pipe && 
-        !self.current_is(ShTokenType::NewLine) {
+        while self.current.token_type == ShTokenType::Pipe && !self.current_is(ShTokenType::NewLine)
+        {
             self.consume(ShTokenType::Pipe);
             pipeline.push(self.parse_command()?);
         }
-        Ok(PipeLineExpr { pipeline, capture_out: None })
+        Ok(PipeLineExpr {
+            pipeline,
+            capture_out: None,
+        })
     }
 
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
@@ -159,8 +164,10 @@ impl Parser {
             self.loc = current_location;
             self.current = self.token[self.loc].clone();
         } else {
-            return Err(format!("Syntax error: Unexpected end of file after '{}'",
-                        self.prev.lexeme));
+            return Err(format!(
+                "Syntax error: Unexpected end of file after '{}'",
+                self.prev.lexeme
+            ));
         }
         self.skip_whitespace();
         Ok(None)
@@ -215,8 +222,9 @@ impl Parser {
         }
         if self.current.token_type == ShTokenType::EndOfFile {
             return Err(format!(
-                    "Syntax error: Unexpected end of file after '{}', expected some token {:?}",
-                    self.prev.lexeme, end));
+                "Syntax error: Unexpected end of file after '{}', expected some token {:?}",
+                self.prev.lexeme, end
+            ));
         }
         self.skip_whitespace(); // skip any trailing whitespace
         Ok(ret)
@@ -229,11 +237,11 @@ impl Parser {
     fn consume(&mut self, token: ShTokenType) -> bool {
         if self.current_is(token) {
             self.next_token();
-            return true
+            return true;
         }
         false
     }
-    
+
     fn next_token(&mut self) {
         // this seems really wasteful but the borrow checker beat me up -- how do we change current
         // and prev to be references?
@@ -256,7 +264,6 @@ impl Parser {
     }
 }
 
-
 mod test {
     #[allow(unused_imports)]
     use super::*;
@@ -266,23 +273,17 @@ mod test {
     fn basic_command() {
         let line = "ls /var /tmp";
         let mut parser = Parser::new(&line);
-        let golden_set = Vec::from([
-            AndOrNode::Pipeline(
-                Box::new(PipeLineExpr {
-                    pipeline: Vec::from([
-                      CommandExpr { 
-                          command: Argument::Name("ls".to_string()),
-                          arguments: Vec::from([
-                              Argument::Name("/var".to_string()),
-                              Argument::Name("/tmp".to_string())
-                          ]),
-                          assignment: None
-                      }
-                    ]),
-                    capture_out: None
-                }
-            ))
-        ]);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CommandExpr {
+                command: Argument::Name("ls".to_string()),
+                arguments: Vec::from([
+                    Argument::Name("/var".to_string()),
+                    Argument::Name("/tmp".to_string()),
+                ]),
+                assignment: None,
+            }]),
+            capture_out: None,
+        }))]);
         parser.parse();
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
@@ -293,20 +294,14 @@ mod test {
     fn test_only_ls() {
         let line = "ls";
         let mut parser = Parser::new(&line);
-        let golden_set = Vec::from([
-            AndOrNode::Pipeline(
-                Box::new(PipeLineExpr {
-                    pipeline: Vec::from([
-                      CommandExpr { 
-                          command: Argument::Name("ls".to_string()),
-                          arguments: Vec::new(),
-                          assignment: None
-                      }
-                    ]),
-                    capture_out: None
-                }
-            ))
-        ]);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CommandExpr {
+                command: Argument::Name("ls".to_string()),
+                arguments: Vec::new(),
+                assignment: None,
+            }]),
+            capture_out: None,
+        }))]);
         parser.parse();
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
@@ -317,25 +312,21 @@ mod test {
     fn test_ls_pipe_wc() {
         let line = "ls | wc";
         let mut parser = Parser::new(&line);
-        let golden_set = Vec::from([
-            AndOrNode::Pipeline(
-                Box::new(PipeLineExpr {
-                    pipeline: Vec::from([
-                      CommandExpr { 
-                          command: Argument::Name("ls".to_string()),
-                          arguments: Vec::new(),
-                          assignment: None
-                      },
-                      CommandExpr { 
-                          command: Argument::Name("wc".to_string()),
-                          arguments: Vec::new(),
-                          assignment: None
-                      }
-                    ]),
-                    capture_out: None
-                }
-            ))
-        ]);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([
+                CommandExpr {
+                    command: Argument::Name("ls".to_string()),
+                    arguments: Vec::new(),
+                    assignment: None,
+                },
+                CommandExpr {
+                    command: Argument::Name("wc".to_string()),
+                    arguments: Vec::new(),
+                    assignment: None,
+                },
+            ]),
+            capture_out: None,
+        }))]);
         parser.parse();
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
@@ -363,25 +354,19 @@ mod test {
     }
 
     #[test]
-    fn happy_path_subshell(){
+    fn happy_path_subshell() {
         let line = "echo `which ls`";
         let mut parser = Parser::new(&line);
-        let golden_set = Vec::from([
-            AndOrNode::Pipeline(
-                Box::new(PipeLineExpr {
-                    pipeline: Vec::from([
-                      CommandExpr {
-                          command: Argument::Name("echo".to_string()),
-                          arguments: Vec::from([Argument::SubShell(SubShellExpr {
-                              shell: "which ls".to_string()
-                          })]),
-                          assignment: None
-                      }
-                    ]),
-                    capture_out: None
-                }
-            ))
-        ]);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CommandExpr {
+                command: Argument::Name("echo".to_string()),
+                arguments: Vec::from([Argument::SubShell(SubShellExpr {
+                    shell: "which ls".to_string(),
+                })]),
+                assignment: None,
+            }]),
+            capture_out: None,
+        }))]);
         parser.parse();
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
@@ -403,30 +388,22 @@ mod test {
         let line = "echo 'hello world' \n echo 'goodbye world'";
         let mut parser = Parser::new(&line);
         let golden_set = Vec::from([
-            AndOrNode::Pipeline(
-                Box::new(PipeLineExpr {
-                    pipeline: Vec::from([
-                      CommandExpr {
-                          command: Argument::Name("echo".to_string()),
-                          arguments: Vec::from([Argument::Name("hello world".to_string())]),
-                          assignment: None
-                      }
-                    ]),
-                    capture_out: None
-                }
-            )),
-            AndOrNode::Pipeline(
-                Box::new(PipeLineExpr {
-                    pipeline: Vec::from([
-                      CommandExpr {
-                          command: Argument::Name("echo".to_string()),
-                          arguments: Vec::from([Argument::Name("goodbye world".to_string())]),
-                          assignment: None
-                      }
-                    ]),
-                    capture_out: None
-                }
-            ))
+            AndOrNode::Pipeline(Box::new(PipeLineExpr {
+                pipeline: Vec::from([CommandExpr {
+                    command: Argument::Name("echo".to_string()),
+                    arguments: Vec::from([Argument::Name("hello world".to_string())]),
+                    assignment: None,
+                }]),
+                capture_out: None,
+            })),
+            AndOrNode::Pipeline(Box::new(PipeLineExpr {
+                pipeline: Vec::from([CommandExpr {
+                    command: Argument::Name("echo".to_string()),
+                    arguments: Vec::from([Argument::Name("goodbye world".to_string())]),
+                    assignment: None,
+                }]),
+                capture_out: None,
+            })),
         ]);
         parser.parse();
         assert!(parser.err.is_empty());
