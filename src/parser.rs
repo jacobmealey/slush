@@ -43,10 +43,13 @@ impl Parser {
 
     pub fn parse(&mut self) {
         self.err = "".to_string();
-        match self.parse_andor_list() {
-            Ok(expr) => { self.exprs.push(expr) },
-            Err(strn) => { self.err = strn; }
-        };
+        while self.current.token_type != ShTokenType::EndOfFile {
+            match self.parse_andor_list() {
+                Ok(expr) => { self.exprs.push(expr) },
+                Err(strn) => { self.err += &strn; }
+            };
+            self.next_token(); // skip a newline
+        }
     }
 
     // the results are a left-associative no precedence 
@@ -75,7 +78,8 @@ impl Parser {
         let mut pipeline: Vec<CommandExpr> = Vec::new();
         pipeline.push(self.parse_command()?);
 
-        while self.current.token_type == ShTokenType::Pipe {
+        while self.current.token_type == ShTokenType::Pipe && 
+        !self.current_is(ShTokenType::NewLine) {
             self.consume(ShTokenType::Pipe);
             pipeline.push(self.parse_command()?);
         }

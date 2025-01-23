@@ -231,8 +231,5 @@ impl Argument {
 // }
 
 fn get_variable(var: String) -> String {
-    match env::var(var) {
-        Ok(val) => val,
-        Err(_) => String::new(),
-    }
+    env::var(var).unwrap_or_default()
 }

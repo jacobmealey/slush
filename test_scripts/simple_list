@@ -1,0 +1,5 @@
+echo "hello, world"
+echo -n 'ls is: '
+echo `which ls`
+echo `ls | awk '{print $1}'`
+ls /var/foo || echo 'no foo' && pwd
