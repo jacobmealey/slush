@@ -1,7 +1,7 @@
 ## Todo
 - [ ] Subshell
   - [x] Backtick subshell
-  - [ ] Dollar sign subshell
+  - [x] Dollar sign subshell
 - [x] Pipelines
   - [x] better pipelines that don't require EOF 
 - [x] Basic single quote strings
