@@ -86,7 +86,7 @@ impl Parser {
         self.skip_whitespace();
         let assignment = self.parse_assignment()?;
         let mut err: String = "".to_string();
-        let command_name = match self.parse_argument() {
+        let command_name = match self.parse_argument()? {
             Some(a) => a,
             None => {
                 err = format!(
@@ -113,7 +113,7 @@ impl Parser {
             && self.current.token_type != ShTokenType::OrIf
         {
             self.next_token();
-            match self.parse_argument() {
+            match self.parse_argument()? {
                 Some(a) => command.arguments.push(a),
                 None => {
                     continue;
@@ -141,7 +141,7 @@ impl Parser {
             if self.current.token_type == ShTokenType::Equal {
                 self.next_token();
                 // an assignment can be a string, an @VAR or a direct token
-                val = Some(match self.parse_argument() {
+                val = Some(match self.parse_argument()? {
                     Some(a) => a,
                     None => Argument::Name(String::from("")),
                 });
@@ -167,23 +167,23 @@ impl Parser {
     //   $ ls /tmp
     //   $ ls '/tmp'
     //   $ ls $TEMP_DIR
-    fn parse_argument(&mut self) -> Option<Argument> {
+    fn parse_argument(&mut self) -> Result<Option<Argument>, String> {
         self.skip_whitespace();
         match self.current.token_type {
-            ShTokenType::Name => Some(Argument::Name(self.current.lexeme.clone())),
-            ShTokenType::SingleQuote => Some(Argument::Name(self.parse_quoted_string())),
+            ShTokenType::Name => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
+            ShTokenType::SingleQuote => Ok(Some(Argument::Name(self.parse_quoted_string()?))),
             ShTokenType::DollarSign => {
                 self.next_token();
-                Some(Argument::Variable(VariableLookup {
+                Ok(Some(Argument::Variable(VariableLookup {
                     name: self.current.lexeme.clone(),
-                }))
+                })))
             }
             // this logic is not right - and breaks if you do something like:
             //      `echo `which ls``
-            ShTokenType::BackTick => Some(Argument::SubShell(SubShellExpr {
-                shell: self.collect_until(ShTokenType::BackTick),
-            })),
-            _ => None,
+            ShTokenType::BackTick => Ok(Some(Argument::SubShell(SubShellExpr {
+                shell: self.collect_until(ShTokenType::BackTick)?,
+            }))),
+            _ => Ok(None),
         }
     }
 
@@ -195,20 +195,28 @@ impl Parser {
 
     // On a single quote string we want to read every lexeme regardless
     // of the token type until we see another single quote.
-    fn parse_quoted_string(&mut self) -> String {
-        self.collect_until(ShTokenType::SingleQuote)
+    fn parse_quoted_string(&mut self) -> Result<String, String> {
+        match self.collect_until(ShTokenType::SingleQuote) {
+            Ok(s) => Ok(s),
+            Err(_) => Err("Syntax error: unterminated string".to_string()),
+        }
     }
 
-    fn collect_until(&mut self, end: ShTokenType) -> String {
+    fn collect_until(&mut self, end: ShTokenType) -> Result<String, String> {
         let mut ret: String = String::from("");
         self.next_token();
         while self.current.token_type != end && self.current.token_type != ShTokenType::EndOfFile {
             ret.push_str(&self.current.lexeme);
             self.next_token();
         }
+        if self.current.token_type == ShTokenType::EndOfFile {
+            return Err(format!(
+                    "Syntax error: Unexpected end of file after '{}', expected some token {:?}",
+                    self.prev.lexeme, end));
+        }
         self.next_token(); // skip the trailing double quote
         self.skip_whitespace(); // skip any trailing whitespace
-        ret
+        Ok(ret)
     }
 
     fn current_is(&self, check: ShTokenType) -> bool {
@@ -334,6 +342,16 @@ mod test {
     #[test]
     fn unexpected_eof() {
         let line = "ls |";
+        let mut parser = Parser::new(&line);
+        parser.parse();
+        // We don't care what the error is just that there is one
+        assert!(!parser.err.is_empty());
+        assert_eq!(parser.exprs.len(), 0);
+    }
+
+    #[test]
+    fn unterminated_string() {
+        let line = "ls '";
         let mut parser = Parser::new(&line);
         parser.parse();
         // We don't care what the error is just that there is one
