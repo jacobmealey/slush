@@ -1,5 +1,5 @@
 ## Todo
-- [ ] Subshell
+- [x] Subshell
   - [x] Backtick subshell
   - [x] Dollar sign subshell
 - [x] Pipelines
