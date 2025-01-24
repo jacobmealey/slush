@@ -1,4 +1,6 @@
 use std::collections::{HashMap, HashSet};
+use std::iter::Peekable;
+use std::str::Chars;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ShTokenType {
     NewLine,
@@ -6,9 +8,6 @@ pub enum ShTokenType {
     EndOfFile,          // EOF
     BackSlash,          // \
     DollarSign,         // $
-    BackTick,           // `
-    DoubleQuote,        // "
-    SingleQuote,        // '
     LeftParen,          // (
     RightParen,         // )
     LeftBracket,        // [
@@ -50,6 +49,9 @@ pub enum ShTokenType {
     Select,
     Time,
     Name,
+    SingleQuoteStr,
+    DoubleQuoteStr,
+    BackTickStr,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -66,7 +68,7 @@ pub fn is_delemiter(c: char) -> bool {
     delimeter_set.contains(&c)
 }
 
-pub fn tokens(st: &str) -> Vec<Token> {
+pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut current;
     let token_map: HashMap<&str, ShTokenType> = HashMap::from([
@@ -101,6 +103,18 @@ pub fn tokens(st: &str) -> Vec<Token> {
             },
         }
     };
+
+    let scan_until = |token: char, it: &mut Peekable<Chars<'_>>| -> Result<String, String> {
+        let mut ret = String::new();
+        while it.peek() != Some(&token) && it.peek().is_some() {
+            ret.push(it.next().unwrap());
+        }
+        if it.peek().is_none() {
+            return Err(format!("Couldn't find second '{}'.", token));
+        }
+        it.next();
+        Ok(ret)
+    };
     let mut it = st.chars().peekable();
     while let Some(c) = it.next() {
         let token = match c {
@@ -121,16 +135,16 @@ pub fn tokens(st: &str) -> Vec<Token> {
                 token_type: ShTokenType::DollarSign,
             },
             '`' => Token {
-                lexeme: String::from(c),
-                token_type: ShTokenType::BackTick,
+                lexeme: scan_until('`', &mut it)?,
+                token_type: ShTokenType::BackTickStr,
             },
             '"' => Token {
-                lexeme: String::from(c),
-                token_type: ShTokenType::DoubleQuote,
+                lexeme: scan_until('"', &mut it)?,
+                token_type: ShTokenType::DoubleQuoteStr,
             },
             '\'' => Token {
-                lexeme: String::from(c),
-                token_type: ShTokenType::SingleQuote,
+                lexeme: scan_until('\'', &mut it)?,
+                token_type: ShTokenType::SingleQuoteStr,
             },
             '(' => Token {
                 lexeme: String::from(c),
@@ -279,8 +293,7 @@ pub fn tokens(st: &str) -> Vec<Token> {
         };
         tokens.push(token);
     }
-
-    tokens
+    Ok(tokens)
 }
 
 mod tests {
@@ -289,7 +302,7 @@ mod tests {
     #[test]
     fn basic_tokens() {
         let reference_string = "| || > >> < [ [[ ] ]] &&&~${}@*";
-        let toks = tokens(reference_string);
+        let toks = tokens(reference_string).unwrap();
         let good_graces = [
             Token {
                 lexeme: String::from("|"),
@@ -402,7 +415,7 @@ mod tests {
     #[test]
     fn wordy_tokes() {
         let reference_string = "if elif else fi while";
-        let toks = tokens(reference_string);
+        let toks = tokens(reference_string).unwrap();
         let good_graces = [
             Token {
                 lexeme: String::from("if"),
@@ -447,7 +460,7 @@ mod tests {
     #[test]
     fn words_adjacent_to_singles() {
         let reference_string = "if|while{ elif";
-        let toks = tokens(reference_string);
+        let toks = tokens(reference_string).unwrap();
         let good_graces = [
             Token {
                 lexeme: String::from("if"),

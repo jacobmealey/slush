@@ -20,9 +20,9 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(line: &str) -> Parser {
-        let mut parser = Parser {
-            token: tokens(line),
+    pub fn new() -> Parser {
+        Parser {
+            token: Vec::new(),
             exprs: Vec::new(),
             current: Token {
                 lexeme: "".to_string(),
@@ -34,15 +34,21 @@ impl Parser {
             },
             loc: 0,
             err: "".to_string(),
-        };
-        if !parser.token.is_empty() {
-            parser.current = parser.token[0].clone();
         }
-        parser
     }
 
-    pub fn parse(&mut self) {
+    pub fn parse(&mut self, line: &str) {
         self.err = "".to_string();
+        self.token = match tokens(line) {
+            Ok(t) => t,
+            Err(e) => {
+                self.err += &e;
+                Vec::new()
+            }
+        };
+        if !self.token.is_empty() {
+            self.current = self.token[0].clone();
+        }
         while self.current.token_type != ShTokenType::EndOfFile {
             match self.parse_andor_list() {
                 Ok(expr) => self.exprs.push(expr),
@@ -182,7 +188,7 @@ impl Parser {
         self.skip_whitespace();
         match self.current.token_type {
             ShTokenType::Name => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
-            ShTokenType::SingleQuote => Ok(Some(Argument::Name(self.parse_quoted_string()?))),
+            ShTokenType::SingleQuoteStr => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
             ShTokenType::DollarSign => {
                 self.next_token();
                 match self.current.token_type {
@@ -198,8 +204,8 @@ impl Parser {
             }
             // this logic is not right - and breaks if you do something like:
             //      `echo `which ls``
-            ShTokenType::BackTick => Ok(Some(Argument::SubShell(SubShellExpr {
-                shell: self.collect_until(ShTokenType::BackTick)?,
+            ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
+                shell: self.current.lexeme.clone(),
             }))),
             _ => Ok(None),
         }
@@ -209,32 +215,6 @@ impl Parser {
         while self.current.token_type == ShTokenType::WhiteSpace {
             self.next_token();
         }
-    }
-
-    // On a single quote string we want to read every lexeme regardless
-    // of the token type until we see another single quote.
-    fn parse_quoted_string(&mut self) -> Result<String, String> {
-        match self.collect_until(ShTokenType::SingleQuote) {
-            Ok(s) => Ok(s),
-            Err(_) => Err("Syntax error: unterminated string".to_string()),
-        }
-    }
-
-    fn collect_until(&mut self, end: ShTokenType) -> Result<String, String> {
-        let mut ret: String = String::from("");
-        self.next_token();
-        while self.current.token_type != end && self.current.token_type != ShTokenType::EndOfFile {
-            ret.push_str(&self.current.lexeme);
-            self.next_token();
-        }
-        if self.current.token_type == ShTokenType::EndOfFile {
-            return Err(format!(
-                "Syntax error: Unexpected end of file after '{}', expected some token {:?}",
-                self.prev.lexeme, end
-            ));
-        }
-        self.skip_whitespace(); // skip any trailing whitespace
-        Ok(ret)
     }
 
     // For braces and parents assumes you have already ingested left
@@ -254,13 +234,6 @@ impl Parser {
                 ));
             }
             ret.push_str(&self.current.lexeme);
-            // we want to push strings as is, because we don't want to falsely count lefts
-            // or rights that should syntacically be ignored!
-            // TODO: Should strings be handled by the tokenizer???
-            if self.current_is(ShTokenType::SingleQuote) {
-                ret.push_str(&self.collect_until(ShTokenType::SingleQuote)?);
-                ret.push_str(&self.current.lexeme);
-            }
             count += if self.current.token_type == left {
                 1
             } else if self.current.token_type == right {
@@ -314,7 +287,7 @@ mod test {
     #[test]
     fn basic_command() {
         let line = "ls /var /tmp";
-        let mut parser = Parser::new(&line);
+        let mut parser = Parser::new();
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CommandExpr {
                 command: Argument::Name("ls".to_string()),
@@ -326,7 +299,7 @@ mod test {
             }]),
             capture_out: None,
         }))]);
-        parser.parse();
+        parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
         }
@@ -335,7 +308,7 @@ mod test {
     #[test]
     fn test_only_ls() {
         let line = "ls";
-        let mut parser = Parser::new(&line);
+        let mut parser = Parser::new();
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CommandExpr {
                 command: Argument::Name("ls".to_string()),
@@ -344,7 +317,7 @@ mod test {
             }]),
             capture_out: None,
         }))]);
-        parser.parse();
+        parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
         }
@@ -353,7 +326,7 @@ mod test {
     #[test]
     fn test_ls_pipe_wc() {
         let line = "ls | wc";
-        let mut parser = Parser::new(&line);
+        let mut parser = Parser::new();
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([
                 CommandExpr {
@@ -369,7 +342,7 @@ mod test {
             ]),
             capture_out: None,
         }))]);
-        parser.parse();
+        parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
         }
@@ -378,8 +351,8 @@ mod test {
     #[test]
     fn unexpected_eof() {
         let line = "ls |";
-        let mut parser = Parser::new(&line);
-        parser.parse();
+        let mut parser = Parser::new();
+        parser.parse(&line);
         // We don't care what the error is just that there is one
         assert!(!parser.err.is_empty());
         assert_eq!(parser.exprs.len(), 0);
@@ -388,8 +361,8 @@ mod test {
     #[test]
     fn unterminated_string() {
         let line = "ls '";
-        let mut parser = Parser::new(&line);
-        parser.parse();
+        let mut parser = Parser::new();
+        parser.parse(&line);
         // We don't care what the error is just that there is one
         assert!(!parser.err.is_empty());
         assert_eq!(parser.exprs.len(), 0);
@@ -398,7 +371,7 @@ mod test {
     #[test]
     fn happy_path_subshell() {
         let line = "echo `which ls`";
-        let mut parser = Parser::new(&line);
+        let mut parser = Parser::new();
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CommandExpr {
                 command: Argument::Name("echo".to_string()),
@@ -409,7 +382,7 @@ mod test {
             }]),
             capture_out: None,
         }))]);
-        parser.parse();
+        parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
         }
@@ -418,8 +391,8 @@ mod test {
     #[test]
     fn undelimited_subshell() {
         let line = "ls `";
-        let mut parser = Parser::new(&line);
-        parser.parse();
+        let mut parser = Parser::new();
+        parser.parse(&line);
         // We don't care what the error is just that there is one
         assert!(!parser.err.is_empty());
         assert_eq!(parser.exprs.len(), 0);
@@ -428,7 +401,7 @@ mod test {
     #[test]
     fn multi_line_command() {
         let line = "echo 'hello world' \n echo 'goodbye world'";
-        let mut parser = Parser::new(&line);
+        let mut parser = Parser::new();
         let golden_set = Vec::from([
             AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CommandExpr {
@@ -447,7 +420,7 @@ mod test {
                 capture_out: None,
             })),
         ]);
-        parser.parse();
+        parser.parse(&line);
         assert!(parser.err.is_empty());
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
@@ -457,7 +430,7 @@ mod test {
     #[test]
     fn tes_ls_and_pwd() {
         let line = "ls && pwd";
-        let mut parser = Parser::new(&line);
+        let mut parser = Parser::new();
         let golden_set = Vec::from([AndOrNode::Andif(Box::new(AndIf {
             left: AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CommandExpr {
@@ -476,7 +449,7 @@ mod test {
                 capture_out: None,
             })),
         }))]);
-        parser.parse();
+        parser.parse(&line);
         assert!(parser.err.is_empty());
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
@@ -486,18 +459,18 @@ mod test {
     #[test]
     fn subshell_subshell() {
         let line = "echo $(echo $(echo 'hello world'))";
-        let mut parser = Parser::new(&line);
+        let mut parser = Parser::new();
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CommandExpr {
                 command: Argument::Name("echo".to_string()),
                 arguments: Vec::from([Argument::SubShell(SubShellExpr {
-                    shell: "echo $(echo 'hello world')".to_string(),
+                    shell: "echo $(echo hello world)".to_string(),
                 })]),
                 assignment: None,
             }]),
             capture_out: None,
         }))]);
-        parser.parse();
+        parser.parse(&line);
         assert!(parser.err.is_empty());
         println!("{:?}", parser.exprs);
         println!("{:?}", golden_set);

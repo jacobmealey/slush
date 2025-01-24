@@ -10,8 +10,8 @@ fn repl() {
     let mut code = 0;
     if let Some(arg) = env::args().nth(1) {
         let code_str = std::fs::read_to_string(arg).expect("Error reading file");
-        let mut parser = parser::Parser::new(&code_str);
-        parser.parse();
+        let mut parser = parser::Parser::new();
+        parser.parse(&code_str);
         if !parser.err.is_empty() {
             println!("{}", parser.err);
             return;
@@ -27,13 +27,13 @@ fn repl() {
             print!("[{}] $ ", code);
             stdout.flush().expect("Error flushing to stdout");
             let line = stdin.lock().lines().next().unwrap().unwrap();
-            let mut parser = parser::Parser::new(&line);
-            parser.parse();
+            let mut parser = parser::Parser::new();
+            parser.parse(&line);
             if !parser.err.is_empty() {
                 println!("{}", parser.err);
                 continue;
             } else {
-                for mut expr in parser.exprs {
+                for expr in &mut parser.exprs {
                     code = expr.eval();
                 }
             }

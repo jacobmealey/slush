@@ -115,9 +115,9 @@ pub struct SubShellExpr {
 
 impl SubShellExpr {
     pub fn stdout(&self) -> String {
-        let mut parser = Parser::new(&self.shell);
+        let mut parser = Parser::new();
         let shell_output: Rc<RefCell<String>> = Default::default();
-        parser.parse();
+        parser.parse(&self.shell);
         for mut expr in parser.exprs {
             expr.set_output_capture(shell_output.clone());
             expr.eval();
