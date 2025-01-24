@@ -6,11 +6,6 @@ use std::process::Command;
 use std::process::Stdio;
 use std::rc::Rc;
 
-pub trait Evalable {
-    // evaluate SOME command and provide a return value (0 is success, etc.)
-    fn eval(&mut self) -> i32;
-}
-
 #[derive(Debug, PartialEq)]
 pub struct VariableLookup {
     pub name: String,
@@ -127,7 +122,7 @@ impl SubShellExpr {
     }
 }
 
-impl Evalable for AssignmentExpr {
+impl AssignmentExpr {
     fn eval(&mut self) -> i32 {
         unsafe {
             env::set_var(&self.key, self.val.eval());
@@ -138,7 +133,8 @@ impl Evalable for AssignmentExpr {
 
 impl CommandExpr {
     pub fn build_command(&self) -> Box<process::Command> {
-        let mut cmd = Box::new(Command::new(self.command.eval()));
+        let com = self.command.eval();
+        let mut cmd = Box::new(Command::new(&com));
         for arg in &self.arguments {
             cmd.arg(arg.eval());
         }
@@ -146,7 +142,7 @@ impl CommandExpr {
     }
 }
 
-impl Evalable for PipeLineExpr {
+impl PipeLineExpr {
     fn eval(&mut self) -> i32 {
         let mut prev_child: Option<process::Child> = None;
         let sz = self.pipeline.len();
