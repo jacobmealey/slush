@@ -157,23 +157,18 @@ impl PipeLineExpr {
                     continue;
                 }
             }
-            
+
             let base_command = expr.command.eval();
-            // should built ins be there own special node on the tree? 
+            // should built ins be there own special node on the tree?
             if base_command == "cd" {
                 return change_dir::ChangeDir::new(&expr.arguments[0].eval()).eval();
             } else if base_command == "exit" {
-                if expr.arguments.len() > 0 {
-                    std::process::exit(match expr.arguments[0].eval().parse() {
-                        Ok(code) => code,
-                        Err(_) => 0
-                    });
+                if !expr.arguments.is_empty() {
+                    std::process::exit(expr.arguments[0].eval().parse().unwrap_or_default());
                 } else {
                     std::process::exit(0);
                 }
-
             }
-
 
             let mut cmd = expr.build_command();
 
