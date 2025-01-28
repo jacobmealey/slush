@@ -162,6 +162,10 @@ impl PipeLineExpr {
             // should built ins be there own special node on the tree?
             if base_command == "cd" {
                 return change_dir::ChangeDir::new(&expr.arguments[0].eval()).eval();
+            } else if base_command == "true" {
+                return 0;
+            } else if base_command == "false" {
+                return 1;
             } else if base_command == "exit" {
                 if !expr.arguments.is_empty() {
                     std::process::exit(expr.arguments[0].eval().parse().unwrap_or_default());
