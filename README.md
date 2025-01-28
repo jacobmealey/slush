@@ -23,3 +23,5 @@
 - [ ] Alias
 - [ ] essential built-ins
   - [ ] [list of posix built ins at the bottom](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap01.html)
+  - [x] cd
+  - [x] exit
