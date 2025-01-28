@@ -23,9 +23,36 @@ pub struct CommandExpr {
 
 #[derive(Debug, PartialEq)]
 pub struct PipeLineExpr {
-    pub pipeline: Vec<CommandExpr>,
+    pub pipeline: Vec<CompoundList>,
     pub capture_out: Option<Rc<RefCell<String>>>,
 }
+
+#[derive(Debug, PartialEq)]
+pub struct IfExpr {
+    pub condition: PipeLineExpr,
+    pub commands: Vec<PipeLineExpr>
+}
+
+impl IfExpr {
+    pub fn eval(&mut self) -> i32 {
+        println!("HELP");
+        if self.condition.eval() == 0 {
+            println!("Are we evaluation...?");
+            for command in &mut self.commands {
+                println!("Commands we are evaluating...");
+                command.eval();
+            }
+        }
+        0
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum CompoundList {
+    Ifexpr(IfExpr),
+    Commandexpr(CommandExpr)
+}
+
 
 #[derive(Debug, PartialEq)]
 pub enum AndOrNode {
@@ -148,47 +175,53 @@ impl PipeLineExpr {
         let mut prev_child: Option<process::Child> = None;
         let sz = self.pipeline.len();
         for (i, expr) in self.pipeline.iter_mut().enumerate() {
-            if let Some(ref mut ass) = expr.assignment {
-                ass.eval();
-            }
+            match expr {
+                CompoundList::Ifexpr(ifxpr) => ifxpr.eval(),
+                CompoundList::Commandexpr(exp) => {
+                    if let Some(ref mut ass) = exp.assignment {
+                        ass.eval();
+                    }
 
-            if let Argument::Name(arg) = &expr.command {
-                if arg.is_empty() {
-                    continue;
+                    if let Argument::Name(arg) = &exp.command {
+                        if arg.is_empty() {
+                            continue;
+                        }
+                    }
+
+                    let base_command = exp.command.eval();
+                    // should built ins be there own special node on the tree?
+                    if base_command == "cd" {
+                        return change_dir::ChangeDir::new(&exp.arguments[0].eval()).eval();
+                    } else if base_command == "true" {
+                        return 0;
+                    } else if base_command == "false" {
+                        return 1;
+                    } else if base_command == "exit" {
+                        if !exp.arguments.is_empty() {
+                            std::process::exit(exp.arguments[0].eval().parse().unwrap_or_default());
+                        } else {
+                            std::process::exit(0);
+                        }
+                    }
+
+                    let mut cmd = exp.build_command();
+
+                    if let Some(pchild) = prev_child {
+                        cmd.stdin(Stdio::from(pchild.stdout.unwrap()));
+                    }
+                    if i < sz - 1 || self.capture_out.is_some() {
+                        cmd.stdout(Stdio::piped());
+                    }
+                    prev_child = Some(match cmd.spawn() {
+                        Ok(c) => c,
+                        Err(v) => {
+                            println!("{}", v);
+                            return 2;
+                        }
+                    });
+                    0
                 }
-            }
-
-            let base_command = expr.command.eval();
-            // should built ins be there own special node on the tree?
-            if base_command == "cd" {
-                return change_dir::ChangeDir::new(&expr.arguments[0].eval()).eval();
-            } else if base_command == "true" {
-                return 0;
-            } else if base_command == "false" {
-                return 1;
-            } else if base_command == "exit" {
-                if !expr.arguments.is_empty() {
-                    std::process::exit(expr.arguments[0].eval().parse().unwrap_or_default());
-                } else {
-                    std::process::exit(0);
-                }
-            }
-
-            let mut cmd = expr.build_command();
-
-            if let Some(pchild) = prev_child {
-                cmd.stdin(Stdio::from(pchild.stdout.unwrap()));
-            }
-            if i < sz - 1 || self.capture_out.is_some() {
-                cmd.stdout(Stdio::piped());
-            }
-            prev_child = Some(match cmd.spawn() {
-                Ok(c) => c,
-                Err(v) => {
-                    println!("{}", v);
-                    return 2;
-                }
-            });
+            };
         }
         let mut exit_status: i32 = 0;
         if let Some(rcstr) = &self.capture_out {

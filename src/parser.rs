@@ -8,6 +8,8 @@ use crate::expr::OrIf;
 use crate::expr::PipeLineExpr;
 use crate::expr::SubShellExpr;
 use crate::expr::VariableLookup;
+use crate::expr::IfExpr;
+use crate::expr::CompoundList;
 use crate::tokenizer::{tokens, ShTokenType, Token};
 
 pub struct Parser {
@@ -83,19 +85,43 @@ impl Parser {
     }
 
     fn parse_pipeline(&mut self) -> Result<PipeLineExpr, String> {
-        let mut pipeline: Vec<CommandExpr> = Vec::new();
-        pipeline.push(self.parse_command()?);
-
+        let mut pipeline: Vec<CompoundList> = Vec::new();
+        pipeline.push(match self.current.token_type {
+                ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
+                //ShTokenType::Function => self.parse_function()?,
+                _ => CompoundList::Commandexpr(self.parse_command()?)
+        });
         while self.current.token_type == ShTokenType::Pipe && !self.current_is(ShTokenType::NewLine)
         {
             self.consume(ShTokenType::Pipe);
-            pipeline.push(self.parse_command()?);
+            pipeline.push(match self.current.token_type {
+                ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
+                //ShTokenType::Function => self.parse_function()?,
+                _ => CompoundList::Commandexpr(self.parse_command()?)
+            });
         }
         Ok(PipeLineExpr {
             pipeline,
             capture_out: None,
         })
     }
+
+    fn parse_if(&mut self) -> Result<IfExpr, String> {
+        println!("Parsing and if ");
+        self.consume(ShTokenType::If);
+        let condition = self.parse_pipeline()?;
+        self.consume(ShTokenType::Then);
+        let mut commands: Vec<PipeLineExpr> = Vec::new();
+        while !self.current_is(ShTokenType::Fi) {
+            commands.push(self.parse_pipeline()?);
+        }
+
+        Ok(IfExpr {condition, commands})
+    }
+
+    // fn parse_function(&mut self) -> Result<FunctionExpr, String> {
+
+    // }
 
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
         self.skip_whitespace();
@@ -126,6 +152,9 @@ impl Parser {
             && self.current.token_type != ShTokenType::SemiColon
             && self.current.token_type != ShTokenType::AndIf
             && self.current.token_type != ShTokenType::OrIf
+            && self.current.token_type != ShTokenType::If
+            && self.current.token_type != ShTokenType::Fi
+            && self.current.token_type != ShTokenType::Then
         {
             self.next_token();
             match self.parse_argument()? {
@@ -289,14 +318,14 @@ mod test {
         let line = "ls /var /tmp";
         let mut parser = Parser::new();
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
-            pipeline: Vec::from([CommandExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("ls".to_string()),
                 arguments: Vec::from([
                     Argument::Name("/var".to_string()),
                     Argument::Name("/tmp".to_string()),
                 ]),
                 assignment: None,
-            }]),
+            })]),
             capture_out: None,
         }))]);
         parser.parse(&line);
@@ -310,11 +339,11 @@ mod test {
         let line = "ls";
         let mut parser = Parser::new();
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
-            pipeline: Vec::from([CommandExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("ls".to_string()),
                 arguments: Vec::new(),
                 assignment: None,
-            }]),
+            })]),
             capture_out: None,
         }))]);
         parser.parse(&line);
@@ -329,16 +358,16 @@ mod test {
         let mut parser = Parser::new();
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([
-                CommandExpr {
+                CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("ls".to_string()),
                     arguments: Vec::new(),
                     assignment: None,
-                },
-                CommandExpr {
+                }),
+                CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("wc".to_string()),
                     arguments: Vec::new(),
                     assignment: None,
-                },
+                }),
             ]),
             capture_out: None,
         }))]);
@@ -373,13 +402,13 @@ mod test {
         let line = "echo `which ls`";
         let mut parser = Parser::new();
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
-            pipeline: Vec::from([CommandExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("echo".to_string()),
                 arguments: Vec::from([Argument::SubShell(SubShellExpr {
                     shell: "which ls".to_string(),
                 })]),
                 assignment: None,
-            }]),
+            })]),
             capture_out: None,
         }))]);
         parser.parse(&line);
@@ -404,19 +433,19 @@ mod test {
         let mut parser = Parser::new();
         let golden_set = Vec::from([
             AndOrNode::Pipeline(Box::new(PipeLineExpr {
-                pipeline: Vec::from([CommandExpr {
+                pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("echo".to_string()),
                     arguments: Vec::from([Argument::Name("hello world".to_string())]),
                     assignment: None,
-                }]),
+                })]),
                 capture_out: None,
             })),
             AndOrNode::Pipeline(Box::new(PipeLineExpr {
-                pipeline: Vec::from([CommandExpr {
+                pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("echo".to_string()),
                     arguments: Vec::from([Argument::Name("goodbye world".to_string())]),
                     assignment: None,
-                }]),
+                })]),
                 capture_out: None,
             })),
         ]);
@@ -433,19 +462,19 @@ mod test {
         let mut parser = Parser::new();
         let golden_set = Vec::from([AndOrNode::Andif(Box::new(AndIf {
             left: AndOrNode::Pipeline(Box::new(PipeLineExpr {
-                pipeline: Vec::from([CommandExpr {
+                pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("ls".to_string()),
                     arguments: Vec::new(),
                     assignment: None,
-                }]),
+                })]),
                 capture_out: None,
             })),
             right: AndOrNode::Pipeline(Box::new(PipeLineExpr {
-                pipeline: Vec::from([CommandExpr {
+                pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("pwd".to_string()),
                     arguments: Vec::new(),
                     assignment: None,
-                }]),
+                })]),
                 capture_out: None,
             })),
         }))]);
@@ -461,13 +490,13 @@ mod test {
         let line = "echo $(echo $(echo 'hello world'))";
         let mut parser = Parser::new();
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
-            pipeline: Vec::from([CommandExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("echo".to_string()),
                 arguments: Vec::from([Argument::SubShell(SubShellExpr {
                     shell: "echo $(echo hello world)".to_string(),
                 })]),
                 assignment: None,
-            }]),
+            })]),
             capture_out: None,
         }))]);
         parser.parse(&line);
