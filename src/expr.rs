@@ -1,3 +1,4 @@
+pub mod change_dir;
 use crate::parser::Parser;
 use std::cell::RefCell;
 use std::env;
@@ -155,6 +156,10 @@ impl PipeLineExpr {
                 if arg.is_empty() {
                     continue;
                 }
+            }
+            
+            if expr.command.eval() == "cd" {
+                return change_dir::ChangeDir::new(&expr.arguments[0].eval()).eval();
             }
 
             let mut cmd = expr.build_command();

@@ -8,6 +8,8 @@ fn repl() {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
     let mut code = 0;
+    let cd: expr::change_dir::ChangeDir = expr::change_dir::ChangeDir::new("/Users/jacobmealey/");
+    cd.eval();
     if let Some(arg) = env::args().nth(1) {
         let code_str = std::fs::read_to_string(arg).expect("Error reading file");
         let mut parser = parser::Parser::new();
