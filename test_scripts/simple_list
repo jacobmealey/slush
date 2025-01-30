@@ -1,4 +1,8 @@
-echo "hello, world"
-echo 'ls is: ' `which ls && echo -n ' string'`
-echo `ls | awk '{print $1}'`
-ls /var/foo || echo 'no foo' && pwd
+
+if false then
+    echo '===== we are in da if statement ====='
+    echo 'another statement'
+fi
+
+echo hello
+

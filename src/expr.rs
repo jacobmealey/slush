@@ -35,11 +35,8 @@ pub struct IfExpr {
 
 impl IfExpr {
     pub fn eval(&mut self) -> i32 {
-        println!("HELP");
         if self.condition.eval() == 0 {
-            println!("Are we evaluation...?");
             for command in &mut self.commands {
-                println!("Commands we are evaluating...");
                 command.eval();
             }
         }

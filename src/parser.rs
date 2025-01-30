@@ -73,7 +73,6 @@ impl Parser {
                 left = AndOrNode::Andif(Box::new(AndIf { left, right }));
             }
             // these feels yucky - how do we get these two nearly identical blocks
-            self.skip_whitespace();
             if self.current_is(ShTokenType::OrIf) {
                 self.consume(ShTokenType::OrIf);
                 self.skip_whitespace();
@@ -81,17 +80,20 @@ impl Parser {
                 left = AndOrNode::Orif(Box::new(OrIf { left, right }));
             }
         }
+        self.skip_whitespace();
         Ok(left)
     }
 
     fn parse_pipeline(&mut self) -> Result<PipeLineExpr, String> {
+        self.skip_whitespace();
         let mut pipeline: Vec<CompoundList> = Vec::new();
         pipeline.push(match self.current.token_type {
-                ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
-                //ShTokenType::Function => self.parse_function()?,
-                _ => CompoundList::Commandexpr(self.parse_command()?)
+            ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
+            //ShTokenType::Function => self.parse_function()?,
+            _ => CompoundList::Commandexpr(self.parse_command()?)
         });
-        while self.current.token_type == ShTokenType::Pipe && !self.current_is(ShTokenType::NewLine)
+        while self.current_is(ShTokenType::Pipe) && 
+            !self.current_is(ShTokenType::NewLine)
         {
             self.consume(ShTokenType::Pipe);
             pipeline.push(match self.current.token_type {
@@ -107,12 +109,11 @@ impl Parser {
     }
 
     fn parse_if(&mut self) -> Result<IfExpr, String> {
-        println!("Parsing and if ");
         self.consume(ShTokenType::If);
         let condition = self.parse_pipeline()?;
         self.consume(ShTokenType::Then);
         let mut commands: Vec<PipeLineExpr> = Vec::new();
-        while !self.current_is(ShTokenType::Fi) {
+        while !self.current_is(ShTokenType::Fi) && !self.current_is(ShTokenType::EndOfFile) {
             commands.push(self.parse_pipeline()?);
         }
 
@@ -200,7 +201,7 @@ impl Parser {
             self.current = self.token[self.loc].clone();
         } else {
             return Err(format!(
-                "Syntax error: Unexpected end of file after '{}'",
+                "Syntax error: Unexpected end of file after {:?}",
                 self.prev.lexeme
             ));
         }
@@ -241,7 +242,7 @@ impl Parser {
     }
 
     fn skip_whitespace(&mut self) {
-        while self.current.token_type == ShTokenType::WhiteSpace {
+        while self.current_is(ShTokenType::WhiteSpace) || self.current_is(ShTokenType::NewLine) {
             self.next_token();
         }
     }
@@ -279,6 +280,7 @@ impl Parser {
     }
 
     fn consume(&mut self, token: ShTokenType) -> bool {
+        self.skip_whitespace();
         if self.current_is(token) {
             self.next_token();
             return true;
