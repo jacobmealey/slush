@@ -111,6 +111,7 @@ impl Parser {
     fn parse_if(&mut self) -> Result<IfExpr, String> {
         self.consume(ShTokenType::If);
         let condition = self.parse_pipeline()?;
+        self.consume(ShTokenType::SemiColon);
         self.consume(ShTokenType::Then);
         let mut commands: Vec<PipeLineExpr> = Vec::new();
         while !self.current_is(ShTokenType::Fi) && !self.current_is(ShTokenType::EndOfFile) {
@@ -511,7 +512,7 @@ mod test {
 
     #[test]
     fn test_if_statement() {
-        let line = "if true then echo 'hello world' fi";
+        let line = "if true; then echo 'hello world' fi";
         let mut parser = Parser::new();
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Ifexpr(IfExpr {
