@@ -30,7 +30,7 @@ pub struct PipeLineExpr {
 #[derive(Debug, PartialEq)]
 pub struct IfExpr {
     pub condition: PipeLineExpr,
-    pub commands: Vec<PipeLineExpr>
+    pub commands: Vec<PipeLineExpr>,
 }
 
 impl IfExpr {
@@ -47,9 +47,8 @@ impl IfExpr {
 #[derive(Debug, PartialEq)]
 pub enum CompoundList {
     Ifexpr(IfExpr),
-    Commandexpr(CommandExpr)
+    Commandexpr(CommandExpr),
 }
-
 
 #[derive(Debug, PartialEq)]
 pub enum AndOrNode {

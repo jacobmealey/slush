@@ -4,12 +4,12 @@ use crate::expr::AndOrNode;
 use crate::expr::Argument;
 use crate::expr::AssignmentExpr;
 use crate::expr::CommandExpr;
+use crate::expr::CompoundList;
+use crate::expr::IfExpr;
 use crate::expr::OrIf;
 use crate::expr::PipeLineExpr;
 use crate::expr::SubShellExpr;
 use crate::expr::VariableLookup;
-use crate::expr::IfExpr;
-use crate::expr::CompoundList;
 use crate::tokenizer::{tokens, ShTokenType, Token};
 
 pub struct Parser {
@@ -90,16 +90,14 @@ impl Parser {
         pipeline.push(match self.current.token_type {
             ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
             //ShTokenType::Function => self.parse_function()?,
-            _ => CompoundList::Commandexpr(self.parse_command()?)
+            _ => CompoundList::Commandexpr(self.parse_command()?),
         });
-        while self.current_is(ShTokenType::Pipe) && 
-            !self.current_is(ShTokenType::NewLine)
-        {
+        while self.current_is(ShTokenType::Pipe) && !self.current_is(ShTokenType::NewLine) {
             self.consume(ShTokenType::Pipe);
             pipeline.push(match self.current.token_type {
                 ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
                 //ShTokenType::Function => self.parse_function()?,
-                _ => CompoundList::Commandexpr(self.parse_command()?)
+                _ => CompoundList::Commandexpr(self.parse_command()?),
             });
         }
         Ok(PipeLineExpr {
@@ -119,7 +117,10 @@ impl Parser {
             self.next_token();
         }
 
-        Ok(IfExpr {condition, commands})
+        Ok(IfExpr {
+            condition,
+            commands,
+        })
     }
 
     // fn parse_function(&mut self) -> Result<FunctionExpr, String> {
@@ -244,7 +245,7 @@ impl Parser {
     }
 
     fn skip_whitespace(&mut self) {
-        while self.current_is(ShTokenType::WhiteSpace) {//|| self.current_is(ShTokenType::NewLine) {
+        while self.current_is(ShTokenType::WhiteSpace) {
             self.next_token();
         }
     }
