@@ -1,5 +1,8 @@
+echo hello world
 
-if false then
+CC=gcc
+
+if $CC -v then
     echo '===== we are in da if statement ====='
     echo 'another statement'
 fi

@@ -115,6 +115,7 @@ impl Parser {
         let mut commands: Vec<PipeLineExpr> = Vec::new();
         while !self.current_is(ShTokenType::Fi) && !self.current_is(ShTokenType::EndOfFile) {
             commands.push(self.parse_pipeline()?);
+            self.next_token();
         }
 
         Ok(IfExpr {condition, commands})
@@ -242,7 +243,7 @@ impl Parser {
     }
 
     fn skip_whitespace(&mut self) {
-        while self.current_is(ShTokenType::WhiteSpace) || self.current_is(ShTokenType::NewLine) {
+        while self.current_is(ShTokenType::WhiteSpace) {//|| self.current_is(ShTokenType::NewLine) {
             self.next_token();
         }
     }
@@ -503,8 +504,38 @@ mod test {
         }))]);
         parser.parse(&line);
         assert!(parser.err.is_empty());
-        println!("{:?}", parser.exprs);
-        println!("{:?}", golden_set);
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_if_statement() {
+        let line = "if true then echo 'hello world' fi";
+        let mut parser = Parser::new();
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CompoundList::Ifexpr(IfExpr {
+                condition: PipeLineExpr {
+                    pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                        command: Argument::Name("true".to_string()),
+                        arguments: Vec::new(),
+                        assignment: None,
+                    })]),
+                    capture_out: None,
+                },
+                commands: Vec::from([PipeLineExpr {
+                    pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                        command: Argument::Name("echo".to_string()),
+                        arguments: Vec::from([Argument::Name("hello world".to_string())]),
+                        assignment: None,
+                    })]),
+                    capture_out: None,
+                }]),
+            })]),
+            capture_out: None,
+        }))]);
+        parser.parse(&line);
+        assert!(parser.err.is_empty());
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
         }
