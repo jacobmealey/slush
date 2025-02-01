@@ -217,11 +217,11 @@ impl Parser {
     //   $ ls /tmp
     //   $ ls '/tmp'
     //   $ ls $TEMP_DIR
-    fn parse_argument(&mut self) -> Result<Option<Argument>, String> {
+    //   Made public so the tokenizer can use it?
+    pub fn parse_argument(&mut self) -> Result<Option<Argument>, String> {
         self.skip_whitespace();
         match self.current.token_type {
             ShTokenType::Name => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
-            ShTokenType::SingleQuoteStr => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
             ShTokenType::DollarSign => {
                 self.next_token();
                 match self.current.token_type {

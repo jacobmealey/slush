@@ -49,7 +49,6 @@ pub enum ShTokenType {
     Select,
     Time,
     Name,
-    SingleQuoteStr,
     DoubleQuoteStr,
     BackTickStr,
 }
@@ -116,7 +115,9 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
         Ok(ret)
     };
     let mut it = st.chars().peekable();
-    while let Some(c) = it.next() {
+    while it.peek().is_some() { 
+    //while let Some(c) = it.next() {
+        let c = it.next().unwrap();
         let token = match c {
             '\n' => Token {
                 lexeme: String::from(c),
@@ -144,7 +145,7 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
             },
             '\'' => Token {
                 lexeme: scan_until('\'', &mut it)?,
-                token_type: ShTokenType::SingleQuoteStr,
+                token_type: ShTokenType::Name,
             },
             '(' => Token {
                 lexeme: String::from(c),
@@ -291,7 +292,18 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
                 match_token(current)
             }
         };
-        tokens.push(token);
+
+        if tokens.last().is_some() && tokens.last().unwrap().token_type == ShTokenType::Name
+            && token.token_type == ShTokenType::Name 
+        {
+            let last = tokens.pop().unwrap();
+            tokens.push(Token {
+                lexeme: last.lexeme + token.lexeme.as_str(),
+                token_type: ShTokenType::Name,
+            });
+        } else {
+            tokens.push(token);
+        }
     }
     Ok(tokens)
 }
