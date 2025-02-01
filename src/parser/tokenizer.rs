@@ -115,8 +115,8 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
         Ok(ret)
     };
     let mut it = st.chars().peekable();
-    while it.peek().is_some() { 
-    //while let Some(c) = it.next() {
+    while it.peek().is_some() {
+        //while let Some(c) = it.next() {
         let c = it.next().unwrap();
         let token = match c {
             '\n' => Token {
@@ -293,8 +293,9 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
             }
         };
 
-        if tokens.last().is_some() && tokens.last().unwrap().token_type == ShTokenType::Name
-            && token.token_type == ShTokenType::Name 
+        if tokens.last().is_some()
+            && tokens.last().unwrap().token_type == ShTokenType::Name
+            && token.token_type == ShTokenType::Name
         {
             let last = tokens.pop().unwrap();
             tokens.push(Token {

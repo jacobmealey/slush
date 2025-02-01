@@ -428,7 +428,7 @@ mod test {
         let mut parser = Parser::new();
         parser.parse(&line);
         // We don't care what the error is just that there is one
-        assert!(!parser.err.is_empty()  );
+        assert!(!parser.err.is_empty());
         assert_eq!(parser.exprs.len(), 0);
     }
 
