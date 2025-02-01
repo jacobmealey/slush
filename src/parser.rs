@@ -1,16 +1,9 @@
 pub mod tokenizer;
-use crate::expr::AndIf;
-use crate::expr::AndOrNode;
-use crate::expr::Argument;
-use crate::expr::AssignmentExpr;
-use crate::expr::CommandExpr;
-use crate::expr::CompoundList;
-use crate::expr::IfExpr;
-use crate::expr::MergeExpr;
-use crate::expr::OrIf;
-use crate::expr::PipeLineExpr;
-use crate::expr::SubShellExpr;
-use crate::expr::VariableLookup;
+use crate::expr::{
+    AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, IfExpr, MergeExpr, OrIf,
+    PipeLineExpr, SubShellExpr, VariableLookup,
+};
+
 use crate::tokenizer::{tokens, ShTokenType, Token};
 
 pub struct Parser {
@@ -162,12 +155,13 @@ impl Parser {
             && self.current.token_type != ShTokenType::Then
         {
             self.next_token();
+            // how do generalize this?
             match self.parse_argument()? {
                 Some(a) => {
                     if !command.arguments.is_empty()
                         && self.prev.token_type != ShTokenType::WhiteSpace
                     {
-                        let l = command.arguments.pop().expect("Ah it was empty");
+                        let l = command.arguments.pop().unwrap();
                         command.arguments.push(Argument::Merge(MergeExpr {
                             left: Box::new(l),
                             right: Box::new(a),

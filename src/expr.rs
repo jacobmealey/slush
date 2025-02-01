@@ -211,7 +211,7 @@ impl PipeLineExpr {
                     prev_child = Some(match cmd.spawn() {
                         Ok(c) => c,
                         Err(v) => {
-                            println!("{}", v);
+                            println!("Error spawning {}: {}", exp.command.eval(), v);
                             return 2;
                         }
                     });
