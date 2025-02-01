@@ -115,9 +115,7 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
         Ok(ret)
     };
     let mut it = st.chars().peekable();
-    while it.peek().is_some() {
-        //while let Some(c) = it.next() {
-        let c = it.next().unwrap();
+    while let Some(c) = it.next() {
         let token = match c {
             '\n' => Token {
                 lexeme: String::from(c),
