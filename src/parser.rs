@@ -6,6 +6,7 @@ use crate::expr::AssignmentExpr;
 use crate::expr::CommandExpr;
 use crate::expr::CompoundList;
 use crate::expr::IfExpr;
+use crate::expr::MergeExpr;
 use crate::expr::OrIf;
 use crate::expr::PipeLineExpr;
 use crate::expr::SubShellExpr;
@@ -162,7 +163,19 @@ impl Parser {
         {
             self.next_token();
             match self.parse_argument()? {
-                Some(a) => command.arguments.push(a),
+                Some(a) => {
+                    if !command.arguments.is_empty()
+                        && self.prev.token_type != ShTokenType::WhiteSpace
+                    {
+                        let l = command.arguments.pop().expect("Ah it was empty");
+                        command.arguments.push(Argument::Merge(MergeExpr {
+                            left: Box::new(l),
+                            right: Box::new(a),
+                        }));
+                    } else {
+                        command.arguments.push(a)
+                    }
+                }
                 None => {
                     continue;
                 } // ignore all tokens until a delimiting token
@@ -235,8 +248,6 @@ impl Parser {
                     _ => Err("Exepected some value after '$'".to_string()),
                 }
             }
-            // this logic is not right - and breaks if you do something like:
-            //      `echo `which ls``
             ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
                 shell: self.current.lexeme.clone(),
             }))),
@@ -258,7 +269,7 @@ impl Parser {
     ) -> Result<String, String> {
         let mut count = 1;
         let mut ret: String = String::new();
-        while count != 0 && !self.current_is(right) {
+        while count > 0 && !self.current_is(right) {
             self.next_token();
             if self.current_is(ShTokenType::EndOfFile) {
                 return Err(format!(
@@ -266,12 +277,16 @@ impl Parser {
                     right
                 ));
             }
-            ret.push_str(&self.current.lexeme);
             count += if self.current.token_type == left {
+                ret.push_str(&self.current.lexeme);
                 1
             } else if self.current.token_type == right {
+                if count - 1 > 0 {
+                    ret.push_str(&self.current.lexeme);
+                }
                 -1
             } else {
+                ret.push_str(&self.current.lexeme);
                 0
             };
         }
@@ -505,6 +520,7 @@ mod test {
             capture_out: None,
         }))]);
         parser.parse(&line);
+        println!("{:?}", parser.exprs);
         assert!(parser.err.is_empty());
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
@@ -537,6 +553,80 @@ mod test {
             capture_out: None,
         }))]);
         parser.parse(&line);
+        assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_mergeable_line_with_backtick() {
+        let line = "echo hello`world`";
+        let mut parser = Parser::new();
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                command: Argument::Name("echo".to_string()),
+                arguments: Vec::from([Argument::Merge(MergeExpr {
+                    left: Box::new(Argument::Name("hello".to_string())),
+                    right: Box::new(Argument::SubShell(SubShellExpr {
+                        shell: "world".to_string(),
+                    })),
+                })]),
+                assignment: None,
+            })]),
+            capture_out: None,
+        }))]);
+        parser.parse(&line);
+        assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_mergeable_line_with_variable() {
+        let line = "echo hello$PWD";
+        let mut parser = Parser::new();
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                command: Argument::Name("echo".to_string()),
+                arguments: Vec::from([Argument::Merge(MergeExpr {
+                    left: Box::new(Argument::Name("hello".to_string())),
+                    right: Box::new(Argument::Variable(VariableLookup {
+                        name: "PWD".to_string(),
+                    })),
+                })]),
+                assignment: None,
+            })]),
+            capture_out: None,
+        }))]);
+        parser.parse(&line);
+        assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_mergeable_line_shell_first() {
+        let line = "echo $(pwd)file";
+        let mut parser = Parser::new();
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                command: Argument::Name("echo".to_string()),
+                arguments: Vec::from([Argument::Merge(MergeExpr {
+                    left: Box::new(Argument::SubShell(SubShellExpr {
+                        shell: "pwd".to_string(),
+                    })),
+                    right: Box::new(Argument::Name("file".to_string())),
+                })]),
+                assignment: None,
+            })]),
+            capture_out: None,
+        }))]);
+        parser.parse(&line);
+        println!("{:?}", parser.exprs);
+        println!("{:?}", golden_set);
         assert!(parser.err.is_empty());
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));

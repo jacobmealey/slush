@@ -252,10 +252,23 @@ impl PipeLineExpr {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct MergeExpr {
+    pub left: Box<Argument>,
+    pub right: Box<Argument>,
+}
+
+impl MergeExpr {
+    pub fn eval(&self) -> String {
+        self.left.eval() + &self.right.eval()
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Argument {
     Name(String),
     Variable(VariableLookup),
     SubShell(SubShellExpr),
+    Merge(MergeExpr),
 }
 
 impl Argument {
@@ -264,6 +277,7 @@ impl Argument {
             Argument::Name(n) => n.clone(),
             Argument::Variable(variable) => get_variable(variable.name.clone()),
             Argument::SubShell(ss) => ss.stdout(),
+            Argument::Merge(merge) => merge.eval(),
         }
     }
 }

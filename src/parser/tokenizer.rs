@@ -291,6 +291,8 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
             }
         };
 
+        // this works fines for single quoted strings, but i don't like the idea
+        // of the 'tokenizer' having to call executable code and stuff....
         if tokens.last().is_some()
             && tokens.last().unwrap().token_type == ShTokenType::Name
             && token.token_type == ShTokenType::Name
