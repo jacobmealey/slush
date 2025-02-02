@@ -272,17 +272,15 @@ impl Parser {
                 ));
             }
             count += if self.current.token_type == left {
-                ret.push_str(&self.current.lexeme);
                 1
             } else if self.current.token_type == right {
-                if count - 1 > 0 {
-                    ret.push_str(&self.current.lexeme);
-                }
                 -1
             } else {
-                ret.push_str(&self.current.lexeme);
                 0
             };
+            if count > 0 {
+                ret.push_str(&self.current.lexeme)
+            }
         }
         Ok(ret)
     }
