@@ -86,7 +86,7 @@ impl Parser {
             //ShTokenType::Function => self.parse_function()?,
             _ => CompoundList::Commandexpr(self.parse_command()?),
         });
-        while self.current_is(ShTokenType::Pipe) && !self.current_is(ShTokenType::NewLine) {
+        while self.current_is(ShTokenType::Pipe) {
             self.consume(ShTokenType::Pipe);
             pipeline.push(match self.current.token_type {
                 ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
