@@ -2,6 +2,8 @@ pub mod change_dir;
 use crate::parser::Parser;
 use std::cell::RefCell;
 use std::env;
+use std::fs::File;
+use std::io::Write;
 use std::process;
 use std::process::Command;
 use std::process::Stdio;
@@ -25,6 +27,7 @@ pub struct CommandExpr {
 pub struct PipeLineExpr {
     pub pipeline: Vec<CompoundList>,
     pub capture_out: Option<Rc<RefCell<String>>>,
+    pub file_redirect: Option<Argument>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -205,7 +208,7 @@ impl PipeLineExpr {
                     if let Some(pchild) = prev_child {
                         cmd.stdin(Stdio::from(pchild.stdout.unwrap()));
                     }
-                    if i < sz - 1 || self.capture_out.is_some() {
+                    if i < sz - 1 || self.capture_out.is_some() || self.file_redirect.is_some() {
                         cmd.stdout(Stdio::piped());
                     }
                     prev_child = Some(match cmd.spawn() {
@@ -235,12 +238,24 @@ impl PipeLineExpr {
                 .status
                 .code()
                 .expect("Couldn't get exit code from prev job");
+        } else if self.file_redirect.is_some() {
+            let filename = self.file_redirect.as_ref().unwrap().eval();
+            let mut file = match File::create(filename) {
+                Ok(f) => f,
+                Err(_) => return 1,
+            };
+            let outie = prev_child
+                .expect("No Child Process")
+                .wait_with_output()
+                .expect("Nothing");
+            let _ = file.write_all(&outie.stdout.clone());
         } else if prev_child.is_some() {
             let status = prev_child.expect("No such previous child").wait().unwrap();
             exit_status = status
                 .code()
                 .expect("Couldn't get exit code from previous job");
         }
+
         exit_status
     }
 }

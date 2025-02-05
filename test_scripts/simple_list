@@ -2,10 +2,12 @@ echo hello world
 
 CC=gcc
 
-if $CC -v then
+if true; then
     echo '===== we are in da if statement ====='
     echo 'another statement'
 fi
+
+if true 
 
 echo hello
 
