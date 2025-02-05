@@ -11,7 +11,7 @@
   - [x] Assigning Variables
   - [ ] Return values with $?
 - [ ] Control Flow
-  - [ ] if
+  - [x] if
   - [ ] elif
   - [ ] else
   - [ ] while
