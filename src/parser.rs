@@ -655,4 +655,20 @@ mod test {
             assert!(parser.exprs[i].eq(&expr));
         }
     }
+
+    #[test]
+    fn test_dangling_dollar_sign() {
+        let line = "echo $";
+        let mut parser = Parser::new();
+        parser.parse(&line);
+        assert!(!parser.err.is_empty());
+    }
+
+    #[test]
+    fn test_dangling_dollar_sign_in_dangling_and_if() {
+        let line = "echo $ &&";
+        let mut parser = Parser::new();
+        parser.parse(&line);
+        assert!(!parser.err.is_empty());
+    }
 }
