@@ -1,4 +1,4 @@
-[![Rust](https://github.com/jacobmealey/slush/actions/workflows/rust.yml/badge.svg)](https://github.com/jacobmealey/slush/actions/workflows/rust.yml)
+[![Build](https://github.com/jacobmealey/slush/actions/workflows/rust.yml/badge.svg)](https://github.com/jacobmealey/slush/actions/workflows/rust.yml)
 ## Todo
 - [x] Subshell
   - [x] Backtick subshell
