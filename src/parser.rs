@@ -255,7 +255,7 @@ impl Parser {
                         shell: self
                             .collect_matching(ShTokenType::LeftParen, ShTokenType::RightParen)?,
                     }))),
-                    _ => Err("Exepected some value after '$'".to_string()),
+                    _ => Err("Expected some value after '$'".to_string()),
                 }
             }
             ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
