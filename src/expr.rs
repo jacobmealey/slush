@@ -28,6 +28,7 @@ pub struct PipeLineExpr {
     pub pipeline: Vec<CompoundList>,
     pub capture_out: Option<Rc<RefCell<String>>>,
     pub file_redirect: Option<Argument>,
+    pub background: bool,
 }
 
 #[derive(Debug, PartialEq)]
@@ -224,20 +225,25 @@ impl PipeLineExpr {
         }
         let mut exit_status: i32 = 0;
         if let Some(rcstr) = &self.capture_out {
-            let outie = prev_child
-                .expect("No Child Process")
-                .wait_with_output()
-                .expect("Nothing");
-            rcstr
-                .borrow_mut()
-                .push_str(&String::from_utf8(outie.stdout.clone()).unwrap());
-            if rcstr.borrow().ends_with('\n') {
-                rcstr.borrow_mut().pop();
+            let p = prev_child.expect("No child.process");
+            if !self.background {
+                let outie = p
+                    .wait_with_output()
+                    .expect("Nothing");
+                rcstr
+                    .borrow_mut()
+                    .push_str(&String::from_utf8(outie.stdout.clone()).unwrap());
+                if rcstr.borrow().ends_with('\n') {
+                    rcstr.borrow_mut().pop();
+                }
+                exit_status = outie
+                    .status
+                    .code()
+                    .expect("Couldn't get exit code from prev job");
+            } else {
+                println!("Spawning command in the background!");
+                exit_status = 0;
             }
-            exit_status = outie
-                .status
-                .code()
-                .expect("Couldn't get exit code from prev job");
         } else if self.file_redirect.is_some() {
             let filename = self.file_redirect.as_ref().unwrap().eval();
             let mut file = match File::create(filename) {
@@ -250,10 +256,15 @@ impl PipeLineExpr {
                 .expect("Nothing");
             let _ = file.write_all(&outie.stdout.clone());
         } else if prev_child.is_some() {
-            let status = prev_child.expect("No such previous child").wait().unwrap();
-            exit_status = status
-                .code()
-                .expect("Couldn't get exit code from previous job");
+            if !self.background {
+                let status = prev_child.expect("No such previous child").wait().unwrap();
+                exit_status = status
+                    .code()
+                    .expect("Couldn't get exit code from previous job");
+            } else {
+                println!("Spawning command in the background!");
+                exit_status = 0;
+            }
         }
 
         exit_status

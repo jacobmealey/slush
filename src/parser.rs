@@ -96,11 +96,13 @@ impl Parser {
         }
         self.skip_whitespace();
         let file_redirect = self.parse_redirect()?;
+        let background = self.parse_control();
 
         Ok(PipeLineExpr {
             pipeline,
             capture_out: None,
             file_redirect,
+            background,
         })
     }
 
@@ -158,6 +160,7 @@ impl Parser {
             && self.current.token_type != ShTokenType::Fi
             && self.current.token_type != ShTokenType::Then
             && self.current.token_type != ShTokenType::RedirectOut
+            && self.current.token_type != ShTokenType::Control
         {
             self.next_token();
             // how do generalize this?
@@ -233,6 +236,15 @@ impl Parser {
             return Ok(filename);
         }
         Ok(None)
+    }
+
+    fn parse_control(&mut self) -> bool {
+        self.skip_whitespace();
+        if self.current_is(ShTokenType::Control) {
+            self.consume(ShTokenType::Control);
+            return true;
+        }
+        return false;
     }
 
     // Arguments can be A single quoteless string (Name), and quoted string or
@@ -356,6 +368,7 @@ mod test {
             })]),
             capture_out: None,
             file_redirect: None,
+            background: false,
         }))]);
         parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
@@ -375,6 +388,7 @@ mod test {
             })]),
             capture_out: None,
             file_redirect: None,
+            background: false,
         }))]);
         parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
@@ -401,6 +415,7 @@ mod test {
             ]),
             capture_out: None,
             file_redirect: None,
+            background: false,
         }))]);
         parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
@@ -442,6 +457,7 @@ mod test {
             })]),
             capture_out: None,
             file_redirect: None,
+            background: false,
         }))]);
         parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
@@ -472,6 +488,7 @@ mod test {
                 })]),
                 capture_out: None,
                 file_redirect: None,
+                background: false,
             })),
             AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
@@ -481,6 +498,7 @@ mod test {
                 })]),
                 capture_out: None,
                 file_redirect: None,
+                background: false,
             })),
         ]);
         parser.parse(&line);
@@ -503,6 +521,7 @@ mod test {
                 })]),
                 capture_out: None,
                 file_redirect: None,
+                background: false,
             })),
             right: AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
@@ -512,6 +531,7 @@ mod test {
                 })]),
                 capture_out: None,
                 file_redirect: None,
+                background: false,
             })),
         }))]);
         parser.parse(&line);
@@ -535,6 +555,7 @@ mod test {
             })]),
             capture_out: None,
             file_redirect: None,
+            background: false,
         }))]);
         parser.parse(&line);
         println!("{:?}", parser.exprs);
@@ -558,6 +579,7 @@ mod test {
                     })]),
                     capture_out: None,
                     file_redirect: None,
+                    background: false,
                 },
                 commands: Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
@@ -567,10 +589,12 @@ mod test {
                     })]),
                     capture_out: None,
                     file_redirect: None,
+                    background: false,
                 }]),
             })]),
             capture_out: None,
             file_redirect: None,
+            background: false,
         }))]);
         parser.parse(&line);
         assert!(parser.err.is_empty());
@@ -596,6 +620,7 @@ mod test {
             })]),
             capture_out: None,
             file_redirect: None,
+            background: false,
         }))]);
         parser.parse(&line);
         assert!(parser.err.is_empty());
@@ -621,6 +646,7 @@ mod test {
             })]),
             capture_out: None,
             file_redirect: None,
+            background: false,
         }))]);
         parser.parse(&line);
         assert!(parser.err.is_empty());
@@ -646,6 +672,7 @@ mod test {
             })]),
             capture_out: None,
             file_redirect: None,
+            background: false,
         }))]);
         parser.parse(&line);
         println!("{:?}", parser.exprs);
