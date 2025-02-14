@@ -225,8 +225,8 @@ impl PipeLineExpr {
         }
         let mut exit_status: i32 = 0;
         if let Some(rcstr) = &self.capture_out {
-            let p = prev_child.expect("No child.process");
             if !self.background {
+                let p = prev_child.expect("No child.process");
                 let outie = p
                     .wait_with_output()
                     .expect("Nothing");
@@ -241,6 +241,7 @@ impl PipeLineExpr {
                     .code()
                     .expect("Couldn't get exit code from prev job");
             } else {
+                 
                 println!("Spawning command in the background!");
                 exit_status = 0;
             }

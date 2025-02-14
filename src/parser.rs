@@ -244,7 +244,7 @@ impl Parser {
             self.consume(ShTokenType::Control);
             return true;
         }
-        return false;
+        false
     }
 
     // Arguments can be A single quoteless string (Name), and quoted string or
@@ -267,7 +267,7 @@ impl Parser {
                         shell: self
                             .collect_matching(ShTokenType::LeftParen, ShTokenType::RightParen)?,
                     }))),
-                    _ => Err("Expected some value after '$'".to_string()),
+                    _ => Err("Exepected some value after '$'".to_string()),
                 }
             }
             ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
