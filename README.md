@@ -30,3 +30,4 @@
   - [x] cd
   - [x] exit
   - [x] true/false
+- [x] ctrl-c to kill jobs
