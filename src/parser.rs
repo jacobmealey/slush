@@ -358,10 +358,13 @@ mod test {
     use super::*;
     #[allow(unused_imports)]
     use crate::parser::Parser;
+    #[allow(unused_imports)]
+    use crate::expr;
     #[test]
     fn basic_command() {
         let line = "ls /var /tmp";
-        let mut parser = Parser::new();
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("ls".to_string()),
@@ -374,6 +377,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            state: expr::State::new()
         }))]);
         parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
@@ -384,7 +388,9 @@ mod test {
     #[test]
     fn test_only_ls() {
         let line = "ls";
-        let mut parser = Parser::new();
+
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("ls".to_string()),
@@ -394,6 +400,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            state: expr::State::new()
         }))]);
         parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
@@ -404,7 +411,8 @@ mod test {
     #[test]
     fn test_ls_pipe_wc() {
         let line = "ls | wc";
-        let mut parser = Parser::new();
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([
                 CompoundList::Commandexpr(CommandExpr {
@@ -421,6 +429,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            state: expr::State::new()
         }))]);
         parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
@@ -431,7 +440,9 @@ mod test {
     #[test]
     fn unexpected_eof() {
         let line = "ls |";
-        let mut parser = Parser::new();
+
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         parser.parse(&line);
         // We don't care what the error is just that there is one
         assert!(!parser.err.is_empty());
@@ -441,7 +452,9 @@ mod test {
     #[test]
     fn unterminated_string() {
         let line = "ls '";
-        let mut parser = Parser::new();
+
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         parser.parse(&line);
         // We don't care what the error is just that there is one
         assert!(!parser.err.is_empty());
@@ -451,7 +464,9 @@ mod test {
     #[test]
     fn happy_path_subshell() {
         let line = "echo `which ls`";
-        let mut parser = Parser::new();
+
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("echo".to_string()),
@@ -463,6 +478,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            state: expr::State::new()
         }))]);
         parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
@@ -473,7 +489,8 @@ mod test {
     #[test]
     fn undelimited_subshell() {
         let line = "ls `";
-        let mut parser = Parser::new();
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         parser.parse(&line);
         // We don't care what the error is just that there is one
         assert!(!parser.err.is_empty());
@@ -483,7 +500,8 @@ mod test {
     #[test]
     fn multi_line_command() {
         let line = "echo 'hello world' \n echo 'goodbye world'";
-        let mut parser = Parser::new();
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         let golden_set = Vec::from([
             AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
@@ -494,6 +512,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
+                state: expr::State::new()
             })),
             AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
@@ -504,6 +523,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
+                state: expr::State::new()
             })),
         ]);
         parser.parse(&line);
@@ -516,7 +536,8 @@ mod test {
     #[test]
     fn tes_ls_and_pwd() {
         let line = "ls && pwd";
-        let mut parser = Parser::new();
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Andif(Box::new(AndIf {
             left: AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
@@ -527,6 +548,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
+                state: expr::State::new()
             })),
             right: AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
@@ -537,6 +559,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
+                state: expr::State::new()
             })),
         }))]);
         parser.parse(&line);
@@ -549,7 +572,8 @@ mod test {
     #[test]
     fn subshell_subshell() {
         let line = "echo $(echo $(echo 'hello world'))";
-        let mut parser = Parser::new();
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("echo".to_string()),
@@ -561,6 +585,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            state: expr::State::new()
         }))]);
         parser.parse(&line);
         println!("{:?}", parser.exprs);
@@ -573,7 +598,8 @@ mod test {
     #[test]
     fn test_if_statement() {
         let line = "if true; then echo 'hello world' fi";
-        let mut parser = Parser::new();
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Ifexpr(IfExpr {
                 condition: PipeLineExpr {
@@ -585,6 +611,7 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    state: expr::State::new()
                 },
                 commands: Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
@@ -595,11 +622,13 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    state: expr::State::new()
                 }]),
             })]),
             capture_out: None,
             file_redirect: None,
             background: false,
+            state: expr::State::new()
         }))]);
         parser.parse(&line);
         assert!(parser.err.is_empty());
@@ -611,7 +640,8 @@ mod test {
     #[test]
     fn test_mergeable_line_with_backtick() {
         let line = "echo hello`world`";
-        let mut parser = Parser::new();
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("echo".to_string()),
@@ -626,6 +656,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            state: expr::State::new()
         }))]);
         parser.parse(&line);
         assert!(parser.err.is_empty());
@@ -637,7 +668,8 @@ mod test {
     #[test]
     fn test_mergeable_line_with_variable() {
         let line = "echo hello$PWD";
-        let mut parser = Parser::new();
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("echo".to_string()),
@@ -652,6 +684,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            state: expr::State::new()
         }))]);
         parser.parse(&line);
         assert!(parser.err.is_empty());
@@ -663,7 +696,8 @@ mod test {
     #[test]
     fn test_mergeable_line_shell_first() {
         let line = "echo $(pwd)file";
-        let mut parser = Parser::new();
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("echo".to_string()),
@@ -678,6 +712,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            state: expr::State::new()
         }))]);
         parser.parse(&line);
         println!("{:?}", parser.exprs);
@@ -691,7 +726,8 @@ mod test {
     #[test]
     fn test_dangling_dollar_sign() {
         let line = "echo $";
-        let mut parser = Parser::new();
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         parser.parse(&line);
         assert!(!parser.err.is_empty());
     }
@@ -699,7 +735,8 @@ mod test {
     #[test]
     fn test_dangling_dollar_sign_in_dangling_and_if() {
         let line = "echo $ &&";
-        let mut parser = Parser::new();
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
         parser.parse(&line);
         assert!(!parser.err.is_empty());
     }
