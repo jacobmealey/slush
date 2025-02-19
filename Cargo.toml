@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 clean-path = "0.2.1"
+ctrlc = "3.4.5"

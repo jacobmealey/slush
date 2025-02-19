@@ -9,6 +9,26 @@ use std::process::Command;
 use std::process::Stdio;
 use std::rc::Rc;
 
+use std::sync::{ Arc, Mutex };
+
+#[derive(Debug)]
+pub struct State {
+    pub jobs: Vec<u32>
+}
+
+impl State {
+    pub fn new() -> Arc<Mutex<State>> {
+        Arc::new(Mutex::new(State { jobs: Vec::new()}))
+    }
+}
+
+// sort of a hack to always assume all states are the same ? seems JANK
+impl PartialEq for State {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct VariableLookup {
     pub name: String,
@@ -23,12 +43,22 @@ pub struct CommandExpr {
     pub assignment: Option<AssignmentExpr>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct PipeLineExpr {
     pub pipeline: Vec<CompoundList>,
     pub capture_out: Option<Rc<RefCell<String>>>,
     pub file_redirect: Option<Argument>,
     pub background: bool,
+    pub state: Arc<Mutex<State>>,
+}
+
+impl PartialEq for PipeLineExpr{
+    fn eq(&self, other: &Self) -> bool { 
+        self.pipeline == other.pipeline 
+            && self.capture_out == other.capture_out
+            && self.file_redirect == other.file_redirect
+            && self.background == other.background
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -36,6 +66,7 @@ pub struct IfExpr {
     pub condition: PipeLineExpr,
     pub commands: Vec<PipeLineExpr>,
 }
+
 
 impl IfExpr {
     pub fn eval(&mut self) -> i32 {
@@ -138,7 +169,7 @@ pub struct SubShellExpr {
 
 impl SubShellExpr {
     pub fn stdout(&self) -> String {
-        let mut parser = Parser::new();
+        let mut parser = Parser::new(State::new());
         let shell_output: Rc<RefCell<String>> = Default::default();
         parser.parse(&self.shell);
         for mut expr in parser.exprs {
@@ -172,8 +203,8 @@ impl CommandExpr {
 
 impl PipeLineExpr {
     fn eval(&mut self) -> i32 {
-        let mut prev_child: Option<process::Child> = None;
         let sz = self.pipeline.len();
+        let mut prev_child: Option<process::Child> = None;
         for (i, expr) in self.pipeline.iter_mut().enumerate() {
             match expr {
                 CompoundList::Ifexpr(ifxpr) => ifxpr.eval(),
@@ -206,19 +237,23 @@ impl PipeLineExpr {
 
                     let mut cmd = exp.build_command();
 
+                    let mut state = self.state.lock().expect("unable to acquire lock");
+
                     if let Some(pchild) = prev_child {
-                        cmd.stdin(Stdio::from(pchild.stdout.unwrap()));
+                        cmd.stdin(pchild.stdout.unwrap());
                     }
                     if i < sz - 1 || self.capture_out.is_some() || self.file_redirect.is_some() {
                         cmd.stdout(Stdio::piped());
                     }
+                    let id: u32;
                     prev_child = Some(match cmd.spawn() {
-                        Ok(c) => c,
+                        Ok(c) => { id = c.id(); c},
                         Err(v) => {
                             println!("Error spawning {}: {}", exp.command.eval(), v);
                             return 2;
                         }
                     });
+                    state.jobs.push(id);
                     0
                 }
             };
@@ -226,10 +261,7 @@ impl PipeLineExpr {
         let mut exit_status: i32 = 0;
         if let Some(rcstr) = &self.capture_out {
             if !self.background {
-                let p = prev_child.expect("No child.process");
-                let outie = p
-                    .wait_with_output()
-                    .expect("Nothing");
+                let outie = prev_child.unwrap().wait_with_output().expect("Nothing");
                 rcstr
                     .borrow_mut()
                     .push_str(&String::from_utf8(outie.stdout.clone()).unwrap());
@@ -241,7 +273,6 @@ impl PipeLineExpr {
                     .code()
                     .expect("Couldn't get exit code from prev job");
             } else {
-                 
                 println!("Spawning command in the background!");
                 exit_status = 0;
             }
@@ -251,19 +282,15 @@ impl PipeLineExpr {
                 Ok(f) => f,
                 Err(_) => return 1,
             };
-            let outie = prev_child
-                .expect("No Child Process")
+            let outie = prev_child.unwrap()
                 .wait_with_output()
                 .expect("Nothing");
             let _ = file.write_all(&outie.stdout.clone());
         } else if prev_child.is_some() {
             if !self.background {
-                let status = prev_child.expect("No such previous child").wait().unwrap();
-                exit_status = status
-                    .code()
-                    .expect("Couldn't get exit code from previous job");
+                let status = prev_child.unwrap().wait().unwrap();
+                exit_status = status.code().unwrap_or(130);
             } else {
-                println!("Spawning command in the background!");
                 exit_status = 0;
             }
         }

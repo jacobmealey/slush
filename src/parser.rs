@@ -1,10 +1,12 @@
 pub mod tokenizer;
+use std::sync::{ Arc, Mutex };
 use crate::expr::{
     AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, IfExpr, MergeExpr, OrIf,
-    PipeLineExpr, SubShellExpr, VariableLookup,
+    PipeLineExpr, SubShellExpr, VariableLookup, State
 };
 
 use crate::tokenizer::{tokens, ShTokenType, Token};
+
 
 pub struct Parser {
     token: Vec<Token>,
@@ -13,10 +15,11 @@ pub struct Parser {
     prev: Token,
     loc: usize,
     pub err: String,
+    state: Arc<Mutex<State>>,
 }
 
 impl Parser {
-    pub fn new() -> Parser {
+    pub fn new(state: Arc<Mutex<State>>) -> Parser {
         Parser {
             token: Vec::new(),
             exprs: Vec::new(),
@@ -30,6 +33,7 @@ impl Parser {
             },
             loc: 0,
             err: "".to_string(),
+            state
         }
     }
 
@@ -103,6 +107,7 @@ impl Parser {
             capture_out: None,
             file_redirect,
             background,
+            state: self.state.clone()
         })
     }
 
@@ -267,7 +272,7 @@ impl Parser {
                         shell: self
                             .collect_matching(ShTokenType::LeftParen, ShTokenType::RightParen)?,
                     }))),
-                    _ => Err("Exepected some value after '$'".to_string()),
+                    _ => Err("Expected some value after '$'".to_string()),
                 }
             }
             ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
