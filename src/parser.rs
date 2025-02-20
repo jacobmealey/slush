@@ -1,12 +1,11 @@
 pub mod tokenizer;
-use std::sync::{ Arc, Mutex };
 use crate::expr::{
     AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, IfExpr, MergeExpr, OrIf,
-    PipeLineExpr, SubShellExpr, VariableLookup, State
+    PipeLineExpr, State, SubShellExpr, VariableLookup,
 };
+use std::sync::{Arc, Mutex};
 
 use crate::tokenizer::{tokens, ShTokenType, Token};
-
 
 pub struct Parser {
     token: Vec<Token>,
@@ -33,7 +32,7 @@ impl Parser {
             },
             loc: 0,
             err: "".to_string(),
-            state
+            state,
         }
     }
 
@@ -107,7 +106,7 @@ impl Parser {
             capture_out: None,
             file_redirect,
             background,
-            state: self.state.clone()
+            state: self.state.clone(),
         })
     }
 
@@ -357,9 +356,9 @@ mod test {
     #[allow(unused_imports)]
     use super::*;
     #[allow(unused_imports)]
-    use crate::parser::Parser;
-    #[allow(unused_imports)]
     use crate::expr;
+    #[allow(unused_imports)]
+    use crate::parser::Parser;
     #[test]
     fn basic_command() {
         let line = "ls /var /tmp";
@@ -377,7 +376,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
-            state: expr::State::new()
+            state: expr::State::new(),
         }))]);
         parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
@@ -400,7 +399,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
-            state: expr::State::new()
+            state: expr::State::new(),
         }))]);
         parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
@@ -429,7 +428,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
-            state: expr::State::new()
+            state: expr::State::new(),
         }))]);
         parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
@@ -478,7 +477,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
-            state: expr::State::new()
+            state: expr::State::new(),
         }))]);
         parser.parse(&line);
         for (i, expr) in golden_set.into_iter().enumerate() {
@@ -512,7 +511,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
-                state: expr::State::new()
+                state: expr::State::new(),
             })),
             AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
@@ -523,7 +522,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
-                state: expr::State::new()
+                state: expr::State::new(),
             })),
         ]);
         parser.parse(&line);
@@ -548,7 +547,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
-                state: expr::State::new()
+                state: expr::State::new(),
             })),
             right: AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
@@ -559,7 +558,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
-                state: expr::State::new()
+                state: expr::State::new(),
             })),
         }))]);
         parser.parse(&line);
@@ -585,7 +584,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
-            state: expr::State::new()
+            state: expr::State::new(),
         }))]);
         parser.parse(&line);
         println!("{:?}", parser.exprs);
@@ -611,7 +610,7 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
-                    state: expr::State::new()
+                    state: expr::State::new(),
                 },
                 commands: Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
@@ -622,13 +621,13 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
-                    state: expr::State::new()
+                    state: expr::State::new(),
                 }]),
             })]),
             capture_out: None,
             file_redirect: None,
             background: false,
-            state: expr::State::new()
+            state: expr::State::new(),
         }))]);
         parser.parse(&line);
         assert!(parser.err.is_empty());
@@ -656,7 +655,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
-            state: expr::State::new()
+            state: expr::State::new(),
         }))]);
         parser.parse(&line);
         assert!(parser.err.is_empty());
@@ -684,7 +683,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
-            state: expr::State::new()
+            state: expr::State::new(),
         }))]);
         parser.parse(&line);
         assert!(parser.err.is_empty());
@@ -712,7 +711,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
-            state: expr::State::new()
+            state: expr::State::new(),
         }))]);
         parser.parse(&line);
         println!("{:?}", parser.exprs);

@@ -32,11 +32,12 @@ fn repl() {
         ctrlc::set_handler(move || {
             for child in &mut s.lock().expect("Could not unlock jobs").jobs {
                 unsafe {
-                    kill(*child, 9);
+                    kill(*child, 2);
                 }
             }
             s.lock().expect("Could not unlock jobs").jobs.clear();
-        }).expect("Error ignoring control C");
+        })
+        .expect("Error ignoring control C");
         loop {
             print!("[{}] $ ", code);
             stdout.flush().expect("Error flushing to stdout");

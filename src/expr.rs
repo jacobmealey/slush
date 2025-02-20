@@ -9,16 +9,16 @@ use std::process::Command;
 use std::process::Stdio;
 use std::rc::Rc;
 
-use std::sync::{ Arc, Mutex };
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub struct State {
-    pub jobs: Vec<u32>
+    pub jobs: Vec<u32>,
 }
 
 impl State {
     pub fn new() -> Arc<Mutex<State>> {
-        Arc::new(Mutex::new(State { jobs: Vec::new()}))
+        Arc::new(Mutex::new(State { jobs: Vec::new() }))
     }
 }
 
@@ -52,9 +52,9 @@ pub struct PipeLineExpr {
     pub state: Arc<Mutex<State>>,
 }
 
-impl PartialEq for PipeLineExpr{
-    fn eq(&self, other: &Self) -> bool { 
-        self.pipeline == other.pipeline 
+impl PartialEq for PipeLineExpr {
+    fn eq(&self, other: &Self) -> bool {
+        self.pipeline == other.pipeline
             && self.capture_out == other.capture_out
             && self.file_redirect == other.file_redirect
             && self.background == other.background
@@ -66,7 +66,6 @@ pub struct IfExpr {
     pub condition: PipeLineExpr,
     pub commands: Vec<PipeLineExpr>,
 }
-
 
 impl IfExpr {
     pub fn eval(&mut self) -> i32 {
@@ -247,7 +246,10 @@ impl PipeLineExpr {
                     }
                     let id: u32;
                     prev_child = Some(match cmd.spawn() {
-                        Ok(c) => { id = c.id(); c},
+                        Ok(c) => {
+                            id = c.id();
+                            c
+                        }
                         Err(v) => {
                             println!("Error spawning {}: {}", exp.command.eval(), v);
                             return 2;
@@ -282,9 +284,7 @@ impl PipeLineExpr {
                 Ok(f) => f,
                 Err(_) => return 1,
             };
-            let outie = prev_child.unwrap()
-                .wait_with_output()
-                .expect("Nothing");
+            let outie = prev_child.unwrap().wait_with_output().expect("Nothing");
             let _ = file.write_all(&outie.stdout.clone());
         } else if prev_child.is_some() {
             if !self.background {
