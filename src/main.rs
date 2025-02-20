@@ -41,7 +41,10 @@ fn repl() {
         loop {
             print!("[{}] $ ", code);
             stdout.flush().expect("Error flushing to stdout");
-            let line = stdin.lock().lines().next().unwrap().unwrap();
+            let line = match stdin.lock().lines().next() {
+                Some(Ok(line)) => line,
+                _ => break,
+            };
             let mut parser = parser::Parser::new(state.clone());
             parser.parse(&line);
             if !parser.err.is_empty() {
