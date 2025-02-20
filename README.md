@@ -31,3 +31,5 @@
   - [x] exit
   - [x] true/false
 - [x] ctrl-c to kill jobs
+  - [ ] fix bug where ctrl-c on a job that modifies TTY state utterly breaks the terminal (for example less)
+  - [ ] fix bug where ctrl-c kills bg jobs as well
