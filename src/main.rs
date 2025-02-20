@@ -35,6 +35,7 @@ fn repl() {
                     kill(*child, 2);
                 }
             }
+            println!();
             s.lock().expect("Could not unlock jobs").jobs.clear();
         })
         .expect("Error ignoring control C");
