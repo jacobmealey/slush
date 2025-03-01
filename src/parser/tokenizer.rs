@@ -5,13 +5,13 @@ use std::str::Chars;
 pub enum ShTokenType {
     NewLine,
     WhiteSpace,
-    EndOfFile,          // EOF
-    BackSlash,          // \
-    DollarSign,         // $
-    LeftParen,          // (
-    RightParen,         // )
-    LeftBracket,        // [
-    RightBracket,       // ]
+    EndOfFile,  // EOF
+    BackSlash,  // \
+    DollarSign, // $
+    LeftParen,  // (
+    RightParen, // )
+    //    LeftBracket,        // [
+    //    RightBracket,       // ]
     DoubleLeftBracket,  // [[
     DoubleRightBracket, // ]]
     LeftBrace,          // {
@@ -204,7 +204,7 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
                 } else {
                     tok = Token {
                         lexeme: String::from(c),
-                        token_type: ShTokenType::LeftBracket,
+                        token_type: ShTokenType::Name,
                     };
                 }
                 tok
@@ -220,7 +220,7 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
                 } else {
                     tok = Token {
                         lexeme: String::from(c),
-                        token_type: ShTokenType::RightBracket,
+                        token_type: ShTokenType::Name,
                     }
                 }
                 tok
@@ -359,7 +359,7 @@ mod tests {
             },
             Token {
                 lexeme: String::from("["),
-                token_type: ShTokenType::LeftBracket,
+                token_type: ShTokenType::Name,
             },
             Token {
                 lexeme: String::from(" "),
@@ -375,7 +375,7 @@ mod tests {
             },
             Token {
                 lexeme: String::from("]"),
-                token_type: ShTokenType::RightBracket,
+                token_type: ShTokenType::Name,
             },
             Token {
                 lexeme: String::from(" "),
