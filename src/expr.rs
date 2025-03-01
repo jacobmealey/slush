@@ -13,12 +13,16 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub struct State {
-    pub jobs: Vec<u32>,
+    pub fg_jobs: Vec<u32>,
+    pub bg_jobs: Vec<u32>,
 }
 
 impl State {
     pub fn new() -> Arc<Mutex<State>> {
-        Arc::new(Mutex::new(State { jobs: Vec::new() }))
+        Arc::new(Mutex::new(State {
+            bg_jobs: Vec::new(),
+            fg_jobs: Vec::new(),
+        }))
     }
 }
 
@@ -255,7 +259,11 @@ impl PipeLineExpr {
                             return 2;
                         }
                     });
-                    state.jobs.push(id);
+                    if self.background {
+                        state.bg_jobs.push(id);
+                    } else {
+                        state.fg_jobs.push(id);
+                    }
                     0
                 }
             };

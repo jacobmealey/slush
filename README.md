@@ -32,8 +32,8 @@
   - [ ] alias
 - [x] ctrl-c to kill jobs
   - [x] fix bug where ctrl-c on a job that modifies TTY state utterly breaks the terminal (for example less)
-  - [ ] fix bug where ctrl-c kills bg jobs as well
+  - [x] fix bug where ctrl-c kills bg jobs as well
   - [ ] Use libc calls directly (no ctrl-c rs crate)
-  - [ ] jobs in array aren't removed when child ends
+  - [x] jobs in array aren't removed when child ends
 - [ ] Path cleaning w/ out clean-path library
 - [ ] Built in functions
