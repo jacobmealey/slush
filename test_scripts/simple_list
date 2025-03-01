@@ -2,12 +2,12 @@ echo hello world
 
 CC=gcc
 
-if true; then
+if [ -f afile ]; then
     echo '===== we are in da if statement ====='
     echo 'another statement'
+else
+    echo 'we are in the else statement'
 fi
-
-if true 
 
 echo hello
 

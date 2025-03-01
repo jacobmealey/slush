@@ -14,7 +14,7 @@
 - [ ] Control Flow
   - [x] if
   - [ ] elif
-  - [ ] else
+  - [x] else
   - [ ] while
   - [ ] for
 - [x] Lists

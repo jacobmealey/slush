@@ -68,13 +68,18 @@ impl PartialEq for PipeLineExpr {
 #[derive(Debug, PartialEq)]
 pub struct IfExpr {
     pub condition: PipeLineExpr,
-    pub commands: Vec<PipeLineExpr>,
+    pub if_branch: Vec<PipeLineExpr>,
+    pub else_branch: Option<Vec<PipeLineExpr>>,
 }
 
 impl IfExpr {
     pub fn eval(&mut self) -> i32 {
         if self.condition.eval() == 0 {
-            for command in &mut self.commands {
+            for command in &mut self.if_branch {
+                command.eval();
+            }
+        } else if let Some(else_branch) = &mut self.else_branch {
+            for command in else_branch {
                 command.eval();
             }
         }
