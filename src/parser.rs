@@ -177,10 +177,6 @@ impl Parser {
             && self.current.token_type != ShTokenType::SemiColon
             && self.current.token_type != ShTokenType::AndIf
             && self.current.token_type != ShTokenType::OrIf
-            && self.current.token_type != ShTokenType::If
-            && self.current.token_type != ShTokenType::Fi
-            && self.current.token_type != ShTokenType::Else
-            && self.current.token_type != ShTokenType::Then
             && self.current.token_type != ShTokenType::RedirectOut
             && self.current.token_type != ShTokenType::Control
         {
@@ -295,6 +291,19 @@ impl Parser {
             ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
                 shell: self.current.lexeme.clone(),
             }))),
+            // This is wildly ugly -- someone make this better!
+            // We must do this in order to detect 'if' or 'else' as arguments and
+            // translate the individual lexeme to a named argument
+            ShTokenType::Fi
+            | ShTokenType::Else
+            | ShTokenType::If
+            | ShTokenType::Do
+            | ShTokenType::For
+            | ShTokenType::While
+            | ShTokenType::Function
+            | ShTokenType::Case
+            | ShTokenType::Esac
+            | ShTokenType::Then => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
             _ => Ok(None),
         }
     }
@@ -620,7 +629,7 @@ mod test {
 
     #[test]
     fn test_if_statement() {
-        let line = "if true; then echo 'hello world' fi";
+        let line = "if true; then echo 'hello world'\nfi";
         let state = expr::State::new();
         let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
@@ -767,7 +776,7 @@ mod test {
 
     #[test]
     fn test_if_else_statement() {
-        let line = "if true; then\necho 'hello world'\nelse echo 'goodbye world' fi";
+        let line = "if true; then\necho 'hello world'\nelse echo 'goodbye world'\nfi";
         let state = expr::State::new();
         let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
@@ -805,6 +814,34 @@ mod test {
                     background: false,
                     state: expr::State::new(),
                 }])),
+            })]),
+            capture_out: None,
+            file_redirect: None,
+            background: false,
+            state: expr::State::new(),
+        }))]);
+        parser.parse(&line);
+        println!("{:#?}", parser.exprs);
+        // println!("{:#?}", golden_set);
+        assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_valid_lexeme_as_argument_after_command() {
+        let line = "echo if else";
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                command: Argument::Name("echo".to_string()),
+                arguments: Vec::from([
+                    Argument::Name("if".to_string()),
+                    Argument::Name("else".to_string()),
+                ]),
+                assignment: None,
             })]),
             capture_out: None,
             file_redirect: None,
