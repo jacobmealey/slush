@@ -35,5 +35,5 @@
   - [x] fix bug where ctrl-c kills bg jobs as well
   - [ ] Use libc calls directly (no ctrl-c rs crate)
   - [x] jobs in array aren't removed when child ends
-- [ ] Path cleaning w/ out clean-path library
+- [x] Path cleaning w/ out clean-path library
 - [ ] Built in functions
