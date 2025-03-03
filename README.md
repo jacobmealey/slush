@@ -1,3 +1,4 @@
+![Slush Logo](docs/slush_logo.png)
 [![Build](https://github.com/jacobmealey/slush/actions/workflows/rust.yml/badge.svg)](https://github.com/jacobmealey/slush/actions/workflows/rust.yml)
 ## Todo
 - [x] Subshell
