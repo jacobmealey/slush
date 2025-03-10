@@ -1,20 +1,20 @@
 pub mod change_dir;
 use crate::parser::Parser;
+use shared_child::SharedChild;
 use std::cell::RefCell;
 use std::env;
 use std::fs::File;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::process;
 use std::process::Command;
 use std::process::Stdio;
 use std::rc::Rc;
-
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub struct State {
-    pub fg_jobs: Vec<u32>,
-    pub bg_jobs: Vec<u32>,
+    pub fg_jobs: Vec<Arc<SharedChild>>,
+    pub bg_jobs: Vec<Arc<SharedChild>>,
 }
 
 impl State {
@@ -212,7 +212,7 @@ impl CommandExpr {
 impl PipeLineExpr {
     fn eval(&mut self) -> i32 {
         let sz = self.pipeline.len();
-        let mut prev_child: Option<process::Child> = None;
+        let mut prev_child: Option<Arc<SharedChild>> = None;
         for (i, expr) in self.pipeline.iter_mut().enumerate() {
             match expr {
                 CompoundList::Ifexpr(ifxpr) => ifxpr.eval(),
@@ -248,26 +248,33 @@ impl PipeLineExpr {
                     let mut state = self.state.lock().expect("unable to acquire lock");
 
                     if let Some(pchild) = prev_child {
-                        cmd.stdin(pchild.stdout.unwrap());
+                        cmd.stdin(pchild.take_stdout().unwrap());
                     }
                     if i < sz - 1 || self.capture_out.is_some() || self.file_redirect.is_some() {
                         cmd.stdout(Stdio::piped());
                     }
-                    let id: u32;
+
                     prev_child = Some(match cmd.spawn() {
-                        Ok(c) => {
-                            id = c.id();
-                            c
-                        }
+                        Ok(c) => match SharedChild::new(c) {
+                            Ok(sc) => Arc::new(sc),
+                            Err(v) => {
+                                println!(
+                                    "Error creating shared child {}: {}",
+                                    exp.command.eval(),
+                                    v
+                                );
+                                return 2;
+                            }
+                        },
                         Err(v) => {
                             println!("Error spawning {}: {}", exp.command.eval(), v);
                             return 2;
                         }
                     });
                     if self.background {
-                        state.bg_jobs.push(id);
+                        state.bg_jobs.push(prev_child.as_ref().unwrap().clone());
                     } else {
-                        state.fg_jobs.push(id);
+                        state.fg_jobs.push(prev_child.as_ref().unwrap().clone());
                     }
                     0
                 }
@@ -276,17 +283,14 @@ impl PipeLineExpr {
         let mut exit_status: i32 = 0;
         if let Some(rcstr) = &self.capture_out {
             if !self.background {
-                let outie = prev_child.unwrap().wait_with_output().expect("Nothing");
+                let outie = wait_with_output(&prev_child.unwrap()).expect("Nothing");
                 rcstr
                     .borrow_mut()
                     .push_str(&String::from_utf8(outie.stdout.clone()).unwrap());
                 if rcstr.borrow().ends_with('\n') {
                     rcstr.borrow_mut().pop();
                 }
-                exit_status = outie
-                    .status
-                    .code()
-                    .expect("Couldn't get exit code from prev job");
+                exit_status = outie.status.expect("Couldn't get exit code from prev job");
             } else {
                 println!("Spawning command in the background!");
                 exit_status = 0;
@@ -297,7 +301,7 @@ impl PipeLineExpr {
                 Ok(f) => f,
                 Err(_) => return 1,
             };
-            let outie = prev_child.unwrap().wait_with_output().expect("Nothing");
+            let outie = wait_with_output(&prev_child.unwrap()).expect("Nothing");
             let _ = file.write_all(&outie.stdout.clone());
         } else if prev_child.is_some() {
             if !self.background {
@@ -359,4 +363,48 @@ impl Argument {
 
 fn get_variable(var: String) -> String {
     env::var(var).unwrap_or_default()
+}
+
+// Todo: clean up error mapping.
+fn wait_with_output(child: &SharedChild) -> Result<Output, usize> {
+    drop(child.take_stdin());
+
+    let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+    match (child.take_stdout(), child.take_stderr()) {
+        (None, None) => {}
+        (Some(mut out), None) => {
+            let res = out.read_to_end(&mut stdout);
+            res.map_err(|_| 1usize)?;
+        }
+        (None, Some(mut err)) => {
+            let res = err.read_to_end(&mut stderr);
+            res.map_err(|_| 1usize)?;
+        }
+        (Some(mut out), Some(mut err)) => {
+            let out_handle = std::thread::spawn(move || {
+                let _ = out.read_to_end(&mut stdout);
+                stdout
+            });
+            let err_handle = std::thread::spawn(move || {
+                let _ = err.read_to_end(&mut stderr);
+                stderr
+            });
+
+            stdout = out_handle.join().map_err(|_| 1usize)?;
+            stderr = err_handle.join().map_err(|_| 1usize)?;
+        }
+    }
+
+    let status = child.wait().map_err(|_| 1usize)?;
+    Ok(Output {
+        status: status.code(),
+        stdout,
+        stderr,
+    })
+}
+
+pub struct Output {
+    status: Option<i32>,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
 }
