@@ -118,8 +118,10 @@ impl Parser {
         self.skip_whitespace_newlines();
         let mut if_branch: Vec<PipeLineExpr> = Vec::new();
         let mut else_branch: Option<Vec<PipeLineExpr>> = None;
+        let mut elif_branch: Option<Box<IfExpr>> = None;
         while !self.current_is(ShTokenType::Fi)
             && !self.current_is(ShTokenType::Else)
+            && !self.current_is(ShTokenType::Elif)
             && !self.current_is(ShTokenType::EndOfFile)
         {
             if_branch.push(self.parse_pipeline()?);
@@ -135,11 +137,15 @@ impl Parser {
                 self.next_token();
             }
             else_branch = Some(commands);
+        } else if self.current_is(ShTokenType::Elif) {
+            self.consume(ShTokenType::Elif);
+            elif_branch = Some(Box::new(self.parse_if()?));
         }
 
         Ok(IfExpr {
             condition,
             if_branch,
+            elif_branch,
             else_branch,
         })
     }
