@@ -16,7 +16,7 @@
   - [ ] Return values with $?
 - [ ] Control Flow
   - [x] if
-  - [ ] elif
+  - [x] elif
   - [x] else
   - [ ] while
   - [ ] for
