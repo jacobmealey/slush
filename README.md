@@ -19,11 +19,11 @@
   - [x] Calling variables
   - [x] Assigning Variables
   - [ ] Special Parameters
-    - [ ] previous exit status
+    - [x] previous exit status
     - [ ] Positional params
-    - [ ] PID of subshell
+    - [x] PID of subshell
     - [ ] PID of most recent background
-    - [ ] Name and shell startups 
+    - [x] Name and shell startups 
 - [ ] Control Flow
   - [x] if
   - [x] elif

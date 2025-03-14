@@ -16,10 +16,10 @@ pub enum ShTokenType {
     DoubleRightBracket, // ]]
     LeftBrace,          // {
     RightBrace,         // }
-    Bang,               // !
-    AtSign,             // @
-    Star,               // *
-    Pound,              // #
+    //Bang,               // !
+    AtSign, // @
+    Star,   // *
+    Pound,  // #
     //QuestionMark,       // ?
     Tilde,       // ~
     Pipe,        // |
@@ -161,10 +161,10 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
                 lexeme: String::from(c),
                 token_type: ShTokenType::RightBrace,
             },
-            '!' => Token {
-                lexeme: String::from(c),
-                token_type: ShTokenType::Bang,
-            },
+            //'!' => Token {
+            //    lexeme: String::from(c),
+            //    token_type: ShTokenType::Bang,
+            //},
             '@' => Token {
                 lexeme: String::from(c),
                 token_type: ShTokenType::AtSign,
