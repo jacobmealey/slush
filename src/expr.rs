@@ -8,7 +8,6 @@ use std::process;
 use std::process::Command;
 use std::process::Stdio;
 use std::rc::Rc;
-
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
@@ -254,6 +253,11 @@ impl PipeLineExpr {
                         return 0;
                     } else if base_command == "false" {
                         return 1;
+                    } else if base_command == "astview" {
+                        let mut parser = Parser::new(self.state.clone());
+                        parser.parse(&exp.arguments[0].eval(&self.state));
+                        println!("{:#?}", parser.exprs);
+                        return 0;
                     } else if base_command == "exit" {
                         if !exp.arguments.is_empty() {
                             std::process::exit(
