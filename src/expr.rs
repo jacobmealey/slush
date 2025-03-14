@@ -65,13 +65,20 @@ impl PartialEq for PipeLineExpr {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum IfBranch {
+    Elif(Box<IfExpr>),
+    Else(Vec<PipeLineExpr>),
+}
+
 // instead of making this a tree could i make it a vector?
 #[derive(Debug, PartialEq)]
 pub struct IfExpr {
     pub condition: PipeLineExpr,
     pub if_branch: Vec<PipeLineExpr>,
-    pub elif_branch: Option<Box<IfExpr>>,
-    pub else_branch: Option<Vec<PipeLineExpr>>,
+    pub else_branch: Option<IfBranch>,
+    //pub elif_branch: Option<Box<IfExpr>>,
+    //pub else_branch: Option<Vec<PipeLineExpr>>,
 }
 
 impl IfExpr {
@@ -80,12 +87,17 @@ impl IfExpr {
             for command in &mut self.if_branch {
                 command.eval();
             }
-        } else if let Some(elif_branch) = &mut self.elif_branch {
-            elif_branch.eval();
-        } else if let Some(else_branch) = &mut self.else_branch {
-            for command in else_branch {
-                command.eval();
-            }
+        } else if let Some(branch) = &mut self.else_branch {
+            match branch {
+                IfBranch::Elif(ifb) => {
+                    ifb.eval();
+                }
+                IfBranch::Else(elseb) => {
+                    for command in elseb {
+                        command.eval();
+                    }
+                }
+            };
         }
         0
     }

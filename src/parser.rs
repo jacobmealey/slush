@@ -1,7 +1,7 @@
 pub mod tokenizer;
 use crate::expr::{
-    AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, IfExpr, MergeExpr, OrIf,
-    PipeLineExpr, State, SubShellExpr, VariableLookup,
+    AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, IfBranch, IfExpr,
+    MergeExpr, OrIf, PipeLineExpr, State, SubShellExpr, VariableLookup,
 };
 use std::sync::{Arc, Mutex};
 
@@ -110,6 +110,7 @@ impl Parser {
         })
     }
 
+    // parse_if builds out entire if/elif/else chain.
     fn parse_if(&mut self) -> Result<IfExpr, String> {
         if self.current_is(ShTokenType::If) {
             self.consume(ShTokenType::If);
@@ -121,8 +122,7 @@ impl Parser {
         self.consume(ShTokenType::Then);
         self.skip_whitespace_newlines();
         let mut if_branch: Vec<PipeLineExpr> = Vec::new();
-        let mut else_branch: Option<Vec<PipeLineExpr>> = None;
-        let mut elif_branch: Option<Box<IfExpr>> = None;
+        let mut else_branch: Option<IfBranch> = None;
         while !self.current_is(ShTokenType::Fi)
             && !self.current_is(ShTokenType::Else)
             && !self.current_is(ShTokenType::Elif)
@@ -133,22 +133,21 @@ impl Parser {
 
         self.skip_whitespace_newlines();
         if self.current_is(ShTokenType::Elif) {
-            elif_branch = Some(Box::new(self.parse_if()?));
+            else_branch = Some(IfBranch::Elif(Box::new(self.parse_if()?)));
         } else if self.current_is(ShTokenType::Else) {
             self.consume(ShTokenType::Else);
-            self.skip_whitespace_newlines();
             let mut commands: Vec<PipeLineExpr> = Vec::new();
             while !self.current_is(ShTokenType::Fi) {
+                self.skip_whitespace_newlines();
                 commands.push(self.parse_pipeline()?);
                 self.next_token();
             }
-            else_branch = Some(commands);
+            else_branch = Some(IfBranch::Else(commands));
         }
 
         Ok(IfExpr {
             condition,
             if_branch,
-            elif_branch,
             else_branch,
         })
     }
@@ -667,7 +666,6 @@ mod test {
                     state: expr::State::new(),
                 }]),
                 else_branch: None,
-                elif_branch: None,
             })]),
             capture_out: None,
             file_redirect: None,
@@ -814,8 +812,7 @@ mod test {
                     background: false,
                     state: expr::State::new(),
                 }]),
-                elif_branch: None,
-                else_branch: Some(Vec::from([PipeLineExpr {
+                else_branch: Some(IfBranch::Else(Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("echo".to_string()),
                         arguments: Vec::from([Argument::Name("goodbye world".to_string())]),
@@ -825,7 +822,7 @@ mod test {
                     file_redirect: None,
                     background: false,
                     state: expr::State::new(),
-                }])),
+                }]))),
             })]),
             capture_out: None,
             file_redirect: None,
@@ -898,7 +895,7 @@ mod test {
                     background: false,
                     state: expr::State::new(),
                 }]),
-                elif_branch: Some(Box::new(IfExpr {
+                else_branch: Some(expr::IfBranch::Elif(Box::new(IfExpr {
                     condition: PipeLineExpr {
                         pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                             command: Argument::Name("false".to_string()),
@@ -921,8 +918,7 @@ mod test {
                         background: false,
                         state: expr::State::new(),
                     }]),
-                    elif_branch: None,
-                    else_branch: Some(Vec::from([PipeLineExpr {
+                    else_branch: Some(IfBranch::Else(Vec::from([PipeLineExpr {
                         pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                             command: Argument::Name("exit".to_string()),
                             arguments: Vec::from([Argument::Name("3".to_string())]),
@@ -932,9 +928,8 @@ mod test {
                         file_redirect: None,
                         background: false,
                         state: expr::State::new(),
-                    }])),
-                })),
-                else_branch: None,
+                    }]))),
+                }))),
             })]),
             capture_out: None,
             file_redirect: None,
@@ -982,7 +977,7 @@ mod test {
                     background: false,
                     state: expr::State::new(),
                 }]),
-                elif_branch: Some(Box::new(IfExpr {
+                else_branch: Some(IfBranch::Elif(Box::new(IfExpr {
                     condition: PipeLineExpr {
                         pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                             command: Argument::Name("false".to_string()),
@@ -1005,10 +1000,8 @@ mod test {
                         background: false,
                         state: expr::State::new(),
                     }]),
-                    elif_branch: None,
                     else_branch: None,
-                })),
-                else_branch: None,
+                }))),
             })]),
             capture_out: None,
             file_redirect: None,
