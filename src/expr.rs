@@ -388,8 +388,8 @@ impl Argument {
 fn get_variable(var: String, state: &Arc<Mutex<State>>) -> String {
     match var.as_str() {
         "0" => String::from("slush"),
-        "!" => String::from(process::id().to_string()),
-        "?" => String::from(state.lock().unwrap().prev_status.to_string()),
+        "!" => process::id().to_string(),
+        "?" => state.lock().unwrap().prev_status.to_string(),
         _ => env::var(var).unwrap_or_default(),
     }
 }
