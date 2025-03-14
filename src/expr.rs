@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 pub struct State {
     pub fg_jobs: Vec<u32>,
     pub bg_jobs: Vec<u32>,
+    pub prev_status: i32,
 }
 
 impl State {
@@ -22,6 +23,7 @@ impl State {
         Arc::new(Mutex::new(State {
             bg_jobs: Vec::new(),
             fg_jobs: Vec::new(),
+            prev_status: 0,
         }))
     }
 }
@@ -206,20 +208,20 @@ impl SubShellExpr {
 }
 
 impl AssignmentExpr {
-    fn eval(&mut self) -> i32 {
+    fn eval(&mut self, state: &Arc<Mutex<State>>) -> i32 {
         unsafe {
-            env::set_var(&self.key, self.val.eval());
+            env::set_var(&self.key, self.val.eval(state));
         }
         0
     }
 }
 
 impl CommandExpr {
-    pub fn build_command(&self) -> Box<process::Command> {
-        let com = self.command.eval();
+    pub fn build_command(&self, state: &Arc<Mutex<State>>) -> Box<process::Command> {
+        let com = self.command.eval(state);
         let mut cmd = Box::new(Command::new(&com));
         for arg in &self.arguments {
-            cmd.arg(arg.eval());
+            cmd.arg(arg.eval(state));
         }
         cmd
     }
@@ -234,7 +236,7 @@ impl PipeLineExpr {
                 CompoundList::Ifexpr(ifxpr) => ifxpr.eval(),
                 CompoundList::Commandexpr(exp) => {
                     if let Some(ref mut ass) = exp.assignment {
-                        ass.eval();
+                        ass.eval(&self.state.clone());
                     }
 
                     if let Argument::Name(arg) = &exp.command {
@@ -243,23 +245,29 @@ impl PipeLineExpr {
                         }
                     }
 
-                    let base_command = exp.command.eval();
+                    let base_command = exp.command.eval(&self.state.clone());
                     // should built ins be there own special node on the tree?
                     if base_command == "cd" {
-                        return change_dir::ChangeDir::new(&exp.arguments[0].eval()).eval();
+                        return change_dir::ChangeDir::new(&exp.arguments[0].eval(&self.state))
+                            .eval();
                     } else if base_command == "true" {
                         return 0;
                     } else if base_command == "false" {
                         return 1;
                     } else if base_command == "exit" {
                         if !exp.arguments.is_empty() {
-                            std::process::exit(exp.arguments[0].eval().parse().unwrap_or_default());
+                            std::process::exit(
+                                exp.arguments[0]
+                                    .eval(&self.state)
+                                    .parse()
+                                    .unwrap_or_default(),
+                            );
                         } else {
                             std::process::exit(0);
                         }
                     }
 
-                    let mut cmd = exp.build_command();
+                    let mut cmd = exp.build_command(&self.state.clone());
 
                     let mut state = self.state.lock().expect("unable to acquire lock");
 
@@ -276,7 +284,7 @@ impl PipeLineExpr {
                             c
                         }
                         Err(v) => {
-                            println!("Error spawning {}: {}", exp.command.eval(), v);
+                            println!("Error spawning {}: {}", exp.command.eval(&self.state), v);
                             return 2;
                         }
                     });
@@ -308,7 +316,7 @@ impl PipeLineExpr {
                 exit_status = 0;
             }
         } else if self.file_redirect.is_some() {
-            let filename = self.file_redirect.as_ref().unwrap().eval();
+            let filename = self.file_redirect.as_ref().unwrap().eval(&self.state);
             let mut file = match File::create(filename) {
                 Ok(f) => f,
                 Err(_) => return 1,
@@ -341,8 +349,8 @@ pub struct MergeExpr {
 }
 
 impl MergeExpr {
-    pub fn eval(&self) -> String {
-        self.left.eval() + &self.right.eval()
+    pub fn eval(&self, state: &Arc<Mutex<State>>) -> String {
+        self.left.eval(state) + &self.right.eval(state)
     }
 }
 
@@ -355,12 +363,12 @@ pub enum Argument {
 }
 
 impl Argument {
-    fn eval(&self) -> String {
+    fn eval(&self, state: &Arc<Mutex<State>>) -> String {
         match self {
             Argument::Name(n) => n.clone(),
-            Argument::Variable(variable) => get_variable(variable.name.clone()),
+            Argument::Variable(variable) => get_variable(variable.name.clone(), state),
             Argument::SubShell(ss) => ss.stdout(),
-            Argument::Merge(merge) => merge.eval(),
+            Argument::Merge(merge) => merge.eval(state),
         }
     }
 }
@@ -373,6 +381,10 @@ impl Argument {
 //     //SubShellExpr(SubShellExpr)
 // }
 
-fn get_variable(var: String) -> String {
-    env::var(var).unwrap_or_default()
+fn get_variable(var: String, state: &Arc<Mutex<State>>) -> String {
+    match var.as_str() {
+        "0" => String::from(process::id().to_string()),
+        "?" => String::from(state.lock().unwrap().prev_status.to_string()),
+        _ => env::var(var).unwrap_or_default(),
+    }
 }

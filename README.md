@@ -8,12 +8,22 @@
   - [x] Dollar sign subshell
 - [x] Pipelines
   - [x] better pipelines that don't require EOF 
+- [ ] Expansions
+  - [ ] Brace expansions
+  - [ ] Parameter Expansion
+  - [ ] Tilde Expansion
+  - [ ] Pathname Expansion
 - [x] Basic single quote strings
 - [ ] Double quote strings with substitutions
 - [ ] Environment handling
   - [x] Calling variables
   - [x] Assigning Variables
-  - [ ] Return values with $?
+  - [ ] Special Parameters
+    - [ ] previous exit status
+    - [ ] Positional params
+    - [ ] PID of subshell
+    - [ ] PID of most recent background
+    - [ ] Name and shell startups 
 - [ ] Control Flow
   - [x] if
   - [x] elif
