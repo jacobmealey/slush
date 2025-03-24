@@ -1,7 +1,7 @@
 pub mod tokenizer;
 use crate::expr::{
-    AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, IfBranch, IfExpr,
-    MergeExpr, OrIf, PipeLineExpr, State, SubShellExpr, VariableLookup,
+    AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, ExpansionExpr, IfBranch,
+    IfExpr, MergeExpr, OrIf, PipeLineExpr, State, SubShellExpr, VariableLookup,
 };
 use std::sync::{Arc, Mutex};
 
@@ -254,6 +254,48 @@ impl Parser {
         Ok(None)
     }
 
+    fn parse_expansion(&mut self) -> Result<ExpansionExpr, String> {
+        self.next_token();
+        if self.current_is(ShTokenType::Pound) {
+            println!("huh?");
+            self.next_token();
+            if !self.current_is(ShTokenType::Name) {
+                return Err(String::from("Expected a name after '#'"));
+            }
+
+            return Ok(ExpansionExpr::StringLengthExpansion(
+                self.current.lexeme.clone(),
+            ));
+        } else if self.current_is(ShTokenType::Name) {
+            // we are doing some type expansion thiny
+            let name = self.current.lexeme.clone();
+            self.next_token();
+            if self.current_is(ShTokenType::UseDefault) {
+                self.next_token();
+                let default = self.collect_until(ShTokenType::RightBrace)?;
+                return Ok(ExpansionExpr::ParameterSubstitute(name, default));
+            } else if self.current_is(ShTokenType::AssignDefault) {
+                self.next_token();
+                let default = self.collect_until(ShTokenType::RightBrace)?;
+                return Ok(ExpansionExpr::ParameterAssign(name, default));
+            } else if self.current_is(ShTokenType::ErrorOn) {
+                self.next_token();
+                let default = self.collect_until(ShTokenType::RightBrace)?;
+                return Ok(ExpansionExpr::ParameterError(name, default));
+            } else if self.current_is(ShTokenType::UseNullOrDefault) {
+                self.next_token();
+                let default = self.collect_until(ShTokenType::RightBrace)?;
+                return Ok(ExpansionExpr::ParameterExpansion(default));
+            } else {
+                let default = self.collect_until(ShTokenType::RightBrace)?;
+                return Ok(ExpansionExpr::ParameterExpansion(default));
+            }
+        }
+
+        self.consume(ShTokenType::RightBrace);
+        Err(String::from("Error parsing expansion"))
+    }
+
     fn parse_redirect(&mut self) -> Result<Option<Argument>, String> {
         self.skip_whitespace();
         if self.current_is(ShTokenType::RedirectOut) {
@@ -293,6 +335,9 @@ impl Parser {
                         shell: self
                             .collect_matching(ShTokenType::LeftParen, ShTokenType::RightParen)?,
                     }))),
+                    ShTokenType::LeftBrace => {
+                        Ok(Some(Argument::Expansion(self.parse_expansion()?)))
+                    }
                     _ => Err("Expected some value after '$'".to_string()),
                 }
             }
@@ -355,6 +400,21 @@ impl Parser {
             if count > 0 {
                 ret.push_str(&self.current.lexeme)
             }
+        }
+        Ok(ret)
+    }
+
+    fn collect_until(&mut self, stop: ShTokenType) -> Result<String, String> {
+        let mut ret: String = String::new();
+        while !self.current_is(stop) {
+            if self.current_is(ShTokenType::EndOfFile) {
+                return Err(format!(
+                    "Syntax Error: Unexpected end of file, no matching '{:?}'",
+                    stop
+                ));
+            }
+            ret.push_str(&self.current.lexeme);
+            self.next_token();
         }
         Ok(ret)
     }

@@ -51,6 +51,10 @@ pub enum ShTokenType {
     Name,
     DoubleQuoteStr,
     BackTickStr,
+    UseDefault,       // ${parameter:-[word]}}
+    AssignDefault,    //${parameter:=[word]}}
+    ErrorOn,          // ${parameter:?[word]}}
+    UseNullOrDefault, // ${parameter:+[word]}}
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -62,7 +66,7 @@ pub struct Token {
 pub fn is_delemiter(c: char) -> bool {
     let delimeter_set = HashSet::from([
         ' ', '\t', '$', '\\', '\'', '(', ')', '{', '}', '[', ']', '!', '@', '*', '#', '?', '~',
-        '|', '>', '<', '`', '"', '&', '=', '\n', ';',
+        '|', '>', '<', '`', '"', '&', '=', '\n', ';', ':', '-', '+',
     ]);
     delimeter_set.contains(&c)
 }
@@ -193,6 +197,40 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
                 lexeme: String::from(c),
                 token_type: ShTokenType::SemiColon,
             },
+            ':' => {
+                let tok: Token;
+                if it.peek().is_some() && *it.peek().expect("No char?") == '-' {
+                    tok = Token {
+                        lexeme: String::from(":-"),
+                        token_type: ShTokenType::UseDefault,
+                    };
+                    it.next();
+                } else if it.peek().is_some() && *it.peek().expect("No char?") == '=' {
+                    tok = Token {
+                        lexeme: String::from(":="),
+                        token_type: ShTokenType::AssignDefault,
+                    };
+                    it.next();
+                } else if it.peek().is_some() && *it.peek().expect("No char?") == '?' {
+                    tok = Token {
+                        lexeme: String::from(":?"),
+                        token_type: ShTokenType::ErrorOn,
+                    };
+                    it.next();
+                } else if it.peek().is_some() && *it.peek().expect("No char?") == '+' {
+                    tok = Token {
+                        lexeme: String::from(":+"),
+                        token_type: ShTokenType::UseNullOrDefault,
+                    };
+                    it.next();
+                } else {
+                    tok = Token {
+                        lexeme: String::from(c),
+                        token_type: ShTokenType::Name,
+                    };
+                }
+                tok
+            }
             '[' => {
                 let tok: Token;
                 if it.peek().is_some() && *it.peek().expect("No char?") == '[' {
@@ -306,6 +344,7 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
             tokens.push(token);
         }
     }
+
     Ok(tokens)
 }
 

@@ -359,11 +359,53 @@ impl MergeExpr {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum ExpansionExpr {
+    ParameterExpansion(String), // the same as Argument::Variable
+    StringLengthExpansion(String),
+    ParameterSubstitute(String, String), // if null or unset sets to default
+    ParameterAssign(String, String),     // if null or unset sets to default
+    ParameterError(String, String),      // if null sets null
+}
+
+impl ExpansionExpr {
+    fn eval(&self, state: &Arc<Mutex<State>>) -> String {
+        match self {
+            ExpansionExpr::ParameterExpansion(var) => get_variable(var.clone(), state),
+            ExpansionExpr::StringLengthExpansion(var) => {
+                get_variable(var.clone(), state).len().to_string()
+            }
+            ExpansionExpr::ParameterSubstitute(var, default) => {
+                if !get_variable(var.clone(), state).to_string().is_empty() {
+                    get_variable(var.clone(), state)
+                } else {
+                    default.clone()
+                }
+            }
+            ExpansionExpr::ParameterError(var, err) => {
+                eprintln!("slush: {}: {}", var, err);
+                std::process::exit(1);
+            }
+            ExpansionExpr::ParameterAssign(var, default) => {
+                if !get_variable(var.clone(), state).to_string().is_empty() {
+                    get_variable(var.clone(), state)
+                } else {
+                    unsafe {
+                        env::set_var(var, default);
+                    }
+                    default.clone()
+                }
+            }
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Argument {
     Name(String),
     Variable(VariableLookup),
     SubShell(SubShellExpr),
     Merge(MergeExpr),
+    Expansion(ExpansionExpr),
 }
 
 impl Argument {
@@ -373,6 +415,7 @@ impl Argument {
             Argument::Variable(variable) => get_variable(variable.name.clone(), state),
             Argument::SubShell(ss) => ss.stdout(),
             Argument::Merge(merge) => merge.eval(state),
+            Argument::Expansion(expansion) => expansion.eval(state),
         }
     }
 }

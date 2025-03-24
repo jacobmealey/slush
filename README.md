@@ -9,8 +9,8 @@
 - [x] Pipelines
   - [x] better pipelines that don't require EOF 
 - [ ] Expansions
-  - [ ] Brace expansions
-  - [ ] Parameter Expansion
+  - [x] Brace expansions
+  - [x] Parameter Expansion
   - [ ] Tilde Expansion
   - [ ] Pathname Expansion
 - [x] Basic single quote strings
