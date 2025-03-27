@@ -6,7 +6,6 @@ pub enum ShTokenType {
     NewLine,
     WhiteSpace,
     EndOfFile,          // EOF
-    BackSlash,          // \
     DollarSign,         // $
     LeftParen,          // (
     RightParen,         // )
@@ -116,6 +115,15 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
     };
     let mut it = st.chars().peekable();
     while let Some(c) = it.next() {
+        if c == '#' {
+            // this is ugly
+            for cc in it.by_ref() {
+                if cc == '\n' {
+                    break;
+                }
+            }
+            continue;
+        }
         let token = match c {
             '\n' => Token {
                 lexeme: String::from(c),
@@ -125,10 +133,24 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
                 lexeme: String::from(c),
                 token_type: ShTokenType::WhiteSpace,
             },
-            '\\' => Token {
-                lexeme: String::from(c),
-                token_type: ShTokenType::BackSlash,
-            },
+            '\\' => {
+                if let Some(cc) = it.next() {
+                    match cc {
+                        '\n' | ' ' => {
+                            continue;
+                        }
+                        _ => Token {
+                            lexeme: String::from(cc),
+                            token_type: ShTokenType::Name,
+                        },
+                    }
+                } else {
+                    Token {
+                        lexeme: String::from(""),
+                        token_type: ShTokenType::EndOfFile,
+                    }
+                }
+            }
             '$' => Token {
                 lexeme: String::from(c),
                 token_type: ShTokenType::DollarSign,

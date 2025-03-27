@@ -1,3 +1,4 @@
+#!/usr/local/bin/slush
 echo hello world
 
 CC=gcc
@@ -11,5 +12,10 @@ else
     echo 'we are in the else statement'
 fi
 
+echo 'hello' \
+    'old world'
+
+
+echo $CC
 echo hello
 
