@@ -65,13 +65,13 @@ impl Parser {
         let mut left = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
         while self.current_is(ShTokenType::AndIf) || self.current_is(ShTokenType::OrIf) {
             if self.current_is(ShTokenType::AndIf) {
-                self.consume(ShTokenType::AndIf);
+                self.consume(ShTokenType::AndIf)?;
                 let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
                 left = AndOrNode::Andif(Box::new(AndIf { left, right }));
             }
             // these feels yucky - how do we get these two nearly identical blocks
             if self.current_is(ShTokenType::OrIf) {
-                self.consume(ShTokenType::OrIf);
+                self.consume(ShTokenType::OrIf)?;
                 self.skip_whitespace();
                 let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
                 left = AndOrNode::Orif(Box::new(OrIf { left, right }));
@@ -90,7 +90,7 @@ impl Parser {
             _ => CompoundList::Commandexpr(self.parse_command()?),
         });
         while self.current_is(ShTokenType::Pipe) {
-            self.consume(ShTokenType::Pipe);
+            self.consume(ShTokenType::Pipe)?;
             pipeline.push(match self.current.token_type {
                 ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
                 //ShTokenType::Function => self.parse_function()?,
@@ -113,13 +113,13 @@ impl Parser {
     // parse_if builds out entire if/elif/else chain.
     fn parse_if(&mut self) -> Result<IfExpr, String> {
         if self.current_is(ShTokenType::If) {
-            self.consume(ShTokenType::If);
+            self.consume(ShTokenType::If)?;
         } else if self.current_is(ShTokenType::Elif) {
-            self.consume(ShTokenType::Elif);
+            self.consume(ShTokenType::Elif)?;
         }
         let condition = self.parse_pipeline()?;
-        self.consume(ShTokenType::SemiColon);
-        self.consume(ShTokenType::Then);
+        self.consume(ShTokenType::SemiColon)?;
+        self.consume(ShTokenType::Then)?;
         self.skip_whitespace_newlines();
         let mut if_branch: Vec<PipeLineExpr> = Vec::new();
         let mut else_branch: Option<IfBranch> = None;
@@ -135,7 +135,7 @@ impl Parser {
         if self.current_is(ShTokenType::Elif) {
             else_branch = Some(IfBranch::Elif(Box::new(self.parse_if()?)));
         } else if self.current_is(ShTokenType::Else) {
-            self.consume(ShTokenType::Else);
+            self.consume(ShTokenType::Else)?;
             let mut commands: Vec<PipeLineExpr> = Vec::new();
             while !self.current_is(ShTokenType::Fi) {
                 self.skip_whitespace_newlines();
@@ -292,14 +292,14 @@ impl Parser {
             }
         }
 
-        self.consume(ShTokenType::RightBrace);
+        self.consume(ShTokenType::RightBrace)?;
         Err(String::from("Error parsing expansion"))
     }
 
     fn parse_redirect(&mut self) -> Result<Option<Argument>, String> {
         self.skip_whitespace();
         if self.current_is(ShTokenType::RedirectOut) {
-            self.consume(ShTokenType::RedirectOut);
+            self.consume(ShTokenType::RedirectOut)?;
             let filename = self.parse_argument()?;
             return Ok(filename);
         }
@@ -309,7 +309,7 @@ impl Parser {
     fn parse_control(&mut self) -> bool {
         self.skip_whitespace();
         if self.current_is(ShTokenType::Control) {
-            self.consume(ShTokenType::Control);
+            let _ = self.consume(ShTokenType::Control);
             return true;
         }
         false
@@ -423,13 +423,17 @@ impl Parser {
         self.current.token_type == check
     }
 
-    fn consume(&mut self, token: ShTokenType) -> bool {
+    fn consume(&mut self, token: ShTokenType) -> Result<(), String> {
         self.skip_whitespace();
         if self.current_is(token) {
             self.next_token();
-            return true;
+            Ok(())
+        } else {
+            Err(format!(
+                "Syntax error: Expected a token {:?}, but found {:?}",
+                token, self.current.lexeme
+            ))
         }
-        false
     }
 
     fn next_token(&mut self) {

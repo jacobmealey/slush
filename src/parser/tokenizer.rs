@@ -5,32 +5,28 @@ use std::str::Chars;
 pub enum ShTokenType {
     NewLine,
     WhiteSpace,
-    EndOfFile,  // EOF
-    BackSlash,  // \
-    DollarSign, // $
-    LeftParen,  // (
-    RightParen, // )
-    //    LeftBracket,        // [
-    //    RightBracket,       // ]
+    EndOfFile,          // EOF
+    BackSlash,          // \
+    DollarSign,         // $
+    LeftParen,          // (
+    RightParen,         // )
     DoubleLeftBracket,  // [[
     DoubleRightBracket, // ]]
     LeftBrace,          // {
     RightBrace,         // }
-    //Bang,               // !
-    AtSign, // @
-    Star,   // *
-    Pound,  // #
-    //QuestionMark,       // ?
-    Tilde,       // ~
-    Pipe,        // |
-    Control,     // &
-    RedirectOut, // >
-    RedirectIn,  // <
-    AppendOut,   // >>
-    AndIf,       // &&
-    OrIf,        // ||
-    Equal,       // =
-    SemiColon,   // ;
+    AtSign,             // @
+    Star,               // *
+    Pound,              // #
+    Tilde,              // ~
+    Pipe,               // |
+    Control,            // &
+    RedirectOut,        // >
+    RedirectIn,         // <
+    AppendOut,          // >>
+    AndIf,              // &&
+    OrIf,               // ||
+    Equal,              // =
+    SemiColon,          // ;
     Case,
     Do,
     Done,
@@ -165,10 +161,6 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
                 lexeme: String::from(c),
                 token_type: ShTokenType::RightBrace,
             },
-            //'!' => Token {
-            //    lexeme: String::from(c),
-            //    token_type: ShTokenType::Bang,
-            //},
             '@' => Token {
                 lexeme: String::from(c),
                 token_type: ShTokenType::AtSign,
@@ -181,10 +173,6 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
                 lexeme: String::from(c),
                 token_type: ShTokenType::Pound,
             },
-            //'?' => Token {
-            //    lexeme: String::from(c),
-            //    token_type: ShTokenType::QuestionMark,
-            //},
             '~' => Token {
                 lexeme: String::from(c),
                 token_type: ShTokenType::Tilde,
