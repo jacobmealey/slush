@@ -358,7 +358,18 @@ impl Parser {
             | ShTokenType::Case
             | ShTokenType::Esac
             | ShTokenType::Then => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
-            _ => Ok(None),
+            ShTokenType::WhiteSpace
+            | ShTokenType::NewLine
+            | ShTokenType::SemiColon
+            | ShTokenType::AndIf
+            | ShTokenType::OrIf
+            | ShTokenType::Pipe
+            | ShTokenType::RedirectOut
+            | ShTokenType::Control
+            | ShTokenType::RightParen
+            | ShTokenType::LeftParen
+            | ShTokenType::EndOfFile => Ok(None),
+            _ => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
         }
     }
 

@@ -2,7 +2,7 @@ echo hello world
 
 CC=gcc
 
-if [ -f afile ] then
+if [ -f afile ]; then
     echo '===== we are in da if statement ====='
     echo 'another statement'
 elif [ -f bfile ]; then
