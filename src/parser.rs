@@ -341,6 +341,7 @@ impl Parser {
                     _ => Err("Expected some value after '$'".to_string()),
                 }
             }
+
             ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
                 shell: self.current.lexeme.clone(),
             }))),

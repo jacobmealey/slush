@@ -58,12 +58,12 @@ pub struct Token {
     pub token_type: ShTokenType,
 }
 
-pub fn is_delemiter(c: char) -> bool {
-    let delimeter_set = HashSet::from([
+pub fn is_delimiter(c: char) -> bool {
+    let delimiter_set = HashSet::from([
         ' ', '\t', '$', '\\', '\'', '(', ')', '{', '}', '[', ']', '!', '@', '*', '#', '?', '~',
         '|', '>', '<', '`', '"', '&', '=', '\n', ';', ':', '-', '+',
     ]);
-    delimeter_set.contains(&c)
+    delimiter_set.contains(&c)
 }
 
 pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
@@ -328,7 +328,7 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
             _ => {
                 current = String::from(c);
                 while let Some(cc) = it.peek() {
-                    if !cc.is_whitespace() && !is_delemiter(*cc) {
+                    if !cc.is_whitespace() && !is_delimiter(*cc) {
                         current.push(*cc);
                         it.next();
                     } else {
