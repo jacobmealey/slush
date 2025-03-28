@@ -269,6 +269,18 @@ impl PipeLineExpr {
                         } else {
                             std::process::exit(0);
                         }
+                    } else if base_command == "help" {
+                        println!("slush: A shell you can drink!");
+                        println!("\nBuiltins:");
+                        println!("  cd <dir> - change directory");
+                        println!("  exit [code] - exit the shell, optionally with a code");
+                        println!(
+                            "  astview '<command>' - view the abstract syntax tree of a command"
+                        );
+                        println!("  true - return 0");
+                        println!("  false - return 1");
+                        println!("  help - print this message");
+                        return 0;
                     }
 
                     let mut cmd = exp.build_command(&self.state.clone());
