@@ -49,21 +49,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "shared_child"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09fa9338aed9a1df411814a5b2252f7cd206c55ae9bf2fa763f8de84603aa60c"
-dependencies = [
- "libc",
- "windows-sys",
-]
-
-[[package]]
 name = "slush"
 version = "0.1.0"
 dependencies = [
  "ctrlc",
- "shared_child",
 ]
 
 [[package]]

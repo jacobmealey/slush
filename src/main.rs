@@ -4,6 +4,10 @@ use std::io::{self, BufRead, Write};
 mod expr;
 mod parser;
 
+extern "C" {
+    fn kill(pid: u32, sig: u32) -> u32;
+}
+
 fn repl() {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
@@ -28,7 +32,9 @@ fn repl() {
         let handler_state = state.clone();
         ctrlc::set_handler(move || {
             for child in &mut handler_state.lock().expect("Could not unlock jobs").fg_jobs {
-                child.kill().unwrap();
+                unsafe {
+                    kill(*child, 2);
+                }
             }
             println!();
             handler_state
