@@ -283,7 +283,7 @@ impl PipeLineExpr {
         let mut exit_status: i32 = 0;
         if let Some(rcstr) = &self.capture_out {
             if !self.background {
-                let outie = wait_with_output(&prev_child.unwrap()).expect("Nothing");
+                let outie = wait_with_output(&prev_child.unwrap());
                 rcstr
                     .borrow_mut()
                     .push_str(&String::from_utf8(outie.stdout.clone()).unwrap());
@@ -301,7 +301,7 @@ impl PipeLineExpr {
                 Ok(f) => f,
                 Err(_) => return 1,
             };
-            let outie = wait_with_output(&prev_child.unwrap()).expect("Nothing");
+            let outie = wait_with_output(&prev_child.unwrap());
             let _ = file.write_all(&outie.stdout.clone());
         } else if prev_child.is_some() {
             if !self.background {
@@ -365,46 +365,50 @@ fn get_variable(var: String) -> String {
     env::var(var).unwrap_or_default()
 }
 
-// Todo: clean up error mapping.
-fn wait_with_output(child: &SharedChild) -> Result<Output, usize> {
+fn wait_with_output(child: &SharedChild) -> Output {
     drop(child.take_stdin());
+    let cid = child.id();
 
     let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
     match (child.take_stdout(), child.take_stderr()) {
         (None, None) => {}
         (Some(mut out), None) => {
-            let res = out.read_to_end(&mut stdout);
-            res.map_err(|_| 1usize)?;
+            out.read_to_end(&mut stdout)
+                .unwrap_or_else(|_| panic!("Error reading stdout from pid {cid}"));
         }
         (None, Some(mut err)) => {
-            let res = err.read_to_end(&mut stderr);
-            res.map_err(|_| 1usize)?;
+            err.read_to_end(&mut stderr)
+                .unwrap_or_else(|_| panic!("Error reading from stderr from pid {cid}"));
         }
         (Some(mut out), Some(mut err)) => {
             let out_handle = std::thread::spawn(move || {
-                let _ = out.read_to_end(&mut stdout);
+                out.read_to_end(&mut stdout)
+                    .unwrap_or_else(|_| panic!("Error reading stdout from pid {cid}"));
                 stdout
             });
             let err_handle = std::thread::spawn(move || {
-                let _ = err.read_to_end(&mut stderr);
+                err.read_to_end(&mut stderr)
+                    .unwrap_or_else(|_| panic!("Error reading from stderr from pid {cid}"));
                 stderr
             });
 
-            stdout = out_handle.join().map_err(|_| 1usize)?;
-            stderr = err_handle.join().map_err(|_| 1usize)?;
+            stdout = out_handle.join().expect("thread panicked");
+            stderr = err_handle.join().expect("thread panicked");
         }
     }
 
-    let status = child.wait().map_err(|_| 1usize)?;
-    Ok(Output {
+    let status = child
+        .wait()
+        .unwrap_or_else(|_| panic!("Error waiting from pid {cid}"));
+    Output {
         status: status.code(),
         stdout,
-        stderr,
-    })
+        _stderr: stderr,
+    }
 }
 
 pub struct Output {
     status: Option<i32>,
     stdout: Vec<u8>,
-    stderr: Vec<u8>,
+    _stderr: Vec<u8>,
 }

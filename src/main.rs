@@ -4,10 +4,6 @@ use std::io::{self, BufRead, Write};
 mod expr;
 mod parser;
 
-extern "C" {
-    fn kill(pid: u32, sig: u32) -> u32;
-}
-
 fn repl() {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
