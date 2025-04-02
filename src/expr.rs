@@ -301,7 +301,7 @@ impl PipeLineExpr {
                             Err(v) => {
                                 println!(
                                     "Error creating shared child {}: {}",
-                                    exp.command.eval(),
+                                    exp.command.eval(&self.state),
                                     v
                                 );
                                 return 2;

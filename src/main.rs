@@ -27,7 +27,7 @@ fn repl() {
         let s = state.clone();
         let handler_state = state.clone();
         ctrlc::set_handler(move || {
-            for child in &mut s.lock().expect("Could not unlock jobs").fg_jobs {
+            for child in &mut handler_state.lock().expect("Could not unlock jobs").fg_jobs {
                 child.kill().unwrap();
             }
             println!();
