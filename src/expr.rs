@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 pub struct State {
     pub fg_jobs: Vec<Arc<SharedChild>>,
     pub bg_jobs: Vec<Arc<SharedChild>>,
+    pub prev_status: i32,
 }
 
 impl State {
@@ -22,6 +23,7 @@ impl State {
         Arc::new(Mutex::new(State {
             bg_jobs: Vec::new(),
             fg_jobs: Vec::new(),
+            prev_status: 0,
         }))
     }
 }
@@ -66,10 +68,19 @@ impl PartialEq for PipeLineExpr {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum IfBranch {
+    Elif(Box<IfExpr>),
+    Else(Vec<PipeLineExpr>),
+}
+
+// instead of making this a tree could i make it a vector?
+#[derive(Debug, PartialEq)]
 pub struct IfExpr {
     pub condition: PipeLineExpr,
     pub if_branch: Vec<PipeLineExpr>,
-    pub else_branch: Option<Vec<PipeLineExpr>>,
+    pub else_branch: Option<IfBranch>,
+    //pub elif_branch: Option<Box<IfExpr>>,
+    //pub else_branch: Option<Vec<PipeLineExpr>>,
 }
 
 impl IfExpr {
@@ -78,10 +89,17 @@ impl IfExpr {
             for command in &mut self.if_branch {
                 command.eval();
             }
-        } else if let Some(else_branch) = &mut self.else_branch {
-            for command in else_branch {
-                command.eval();
-            }
+        } else if let Some(branch) = &mut self.else_branch {
+            match branch {
+                IfBranch::Elif(ifb) => {
+                    ifb.eval();
+                }
+                IfBranch::Else(elseb) => {
+                    for command in elseb {
+                        command.eval();
+                    }
+                }
+            };
         }
         0
     }
@@ -190,20 +208,20 @@ impl SubShellExpr {
 }
 
 impl AssignmentExpr {
-    fn eval(&mut self) -> i32 {
+    fn eval(&mut self, state: &Arc<Mutex<State>>) -> i32 {
         unsafe {
-            env::set_var(&self.key, self.val.eval());
+            env::set_var(&self.key, self.val.eval(state));
         }
         0
     }
 }
 
 impl CommandExpr {
-    pub fn build_command(&self) -> Box<process::Command> {
-        let com = self.command.eval();
+    pub fn build_command(&self, state: &Arc<Mutex<State>>) -> Box<process::Command> {
+        let com = self.command.eval(state);
         let mut cmd = Box::new(Command::new(&com));
         for arg in &self.arguments {
-            cmd.arg(arg.eval());
+            cmd.arg(arg.eval(state));
         }
         cmd
     }
@@ -218,7 +236,7 @@ impl PipeLineExpr {
                 CompoundList::Ifexpr(ifxpr) => ifxpr.eval(),
                 CompoundList::Commandexpr(exp) => {
                     if let Some(ref mut ass) = exp.assignment {
-                        ass.eval();
+                        ass.eval(&self.state.clone());
                     }
 
                     if let Argument::Name(arg) = &exp.command {
@@ -227,23 +245,46 @@ impl PipeLineExpr {
                         }
                     }
 
-                    let base_command = exp.command.eval();
+                    let base_command = exp.command.eval(&self.state.clone());
                     // should built ins be there own special node on the tree?
                     if base_command == "cd" {
-                        return change_dir::ChangeDir::new(&exp.arguments[0].eval()).eval();
+                        return change_dir::ChangeDir::new(&exp.arguments[0].eval(&self.state))
+                            .eval();
                     } else if base_command == "true" {
                         return 0;
                     } else if base_command == "false" {
                         return 1;
+                    } else if base_command == "astview" {
+                        let mut parser = Parser::new(self.state.clone());
+                        parser.parse(&exp.arguments[0].eval(&self.state));
+                        println!("{:#?}", parser.exprs);
+                        return 0;
                     } else if base_command == "exit" {
                         if !exp.arguments.is_empty() {
-                            std::process::exit(exp.arguments[0].eval().parse().unwrap_or_default());
+                            std::process::exit(
+                                exp.arguments[0]
+                                    .eval(&self.state)
+                                    .parse()
+                                    .unwrap_or_default(),
+                            );
                         } else {
                             std::process::exit(0);
                         }
+                    } else if base_command == "help" {
+                        println!("slush: A shell you can drink!");
+                        println!("\nBuiltins:");
+                        println!("  cd <dir> - change directory");
+                        println!("  exit [code] - exit the shell, optionally with a code");
+                        println!(
+                            "  astview '<command>' - view the abstract syntax tree of a command"
+                        );
+                        println!("  true - return 0");
+                        println!("  false - return 1");
+                        println!("  help - print this message");
+                        return 0;
                     }
 
-                    let mut cmd = exp.build_command();
+                    let mut cmd = exp.build_command(&self.state.clone());
 
                     let mut state = self.state.lock().expect("unable to acquire lock");
 
@@ -267,7 +308,7 @@ impl PipeLineExpr {
                             }
                         },
                         Err(v) => {
-                            println!("Error spawning {}: {}", exp.command.eval(), v);
+                            println!("Error spawning {}: {}", exp.command.eval(&self.state), v);
                             return 2;
                         }
                     });
@@ -296,7 +337,7 @@ impl PipeLineExpr {
                 exit_status = 0;
             }
         } else if self.file_redirect.is_some() {
-            let filename = self.file_redirect.as_ref().unwrap().eval();
+            let filename = self.file_redirect.as_ref().unwrap().eval(&self.state);
             let mut file = match File::create(filename) {
                 Ok(f) => f,
                 Err(_) => return 1,
@@ -329,8 +370,49 @@ pub struct MergeExpr {
 }
 
 impl MergeExpr {
-    pub fn eval(&self) -> String {
-        self.left.eval() + &self.right.eval()
+    pub fn eval(&self, state: &Arc<Mutex<State>>) -> String {
+        self.left.eval(state) + &self.right.eval(state)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ExpansionExpr {
+    ParameterExpansion(String), // the same as Argument::Variable
+    StringLengthExpansion(String),
+    ParameterSubstitute(String, String), // if null or unset sets to default
+    ParameterAssign(String, String),     // if null or unset sets to default
+    ParameterError(String, String),      // if null sets null
+}
+
+impl ExpansionExpr {
+    fn eval(&self, state: &Arc<Mutex<State>>) -> String {
+        match self {
+            ExpansionExpr::ParameterExpansion(var) => get_variable(var.clone(), state),
+            ExpansionExpr::StringLengthExpansion(var) => {
+                get_variable(var.clone(), state).len().to_string()
+            }
+            ExpansionExpr::ParameterSubstitute(var, default) => {
+                if !get_variable(var.clone(), state).to_string().is_empty() {
+                    get_variable(var.clone(), state)
+                } else {
+                    default.clone()
+                }
+            }
+            ExpansionExpr::ParameterError(var, err) => {
+                eprintln!("slush: {}: {}", var, err);
+                std::process::exit(1);
+            }
+            ExpansionExpr::ParameterAssign(var, default) => {
+                if !get_variable(var.clone(), state).to_string().is_empty() {
+                    get_variable(var.clone(), state)
+                } else {
+                    unsafe {
+                        env::set_var(var, default);
+                    }
+                    default.clone()
+                }
+            }
+        }
     }
 }
 
@@ -340,15 +422,17 @@ pub enum Argument {
     Variable(VariableLookup),
     SubShell(SubShellExpr),
     Merge(MergeExpr),
+    Expansion(ExpansionExpr),
 }
 
 impl Argument {
-    fn eval(&self) -> String {
+    fn eval(&self, state: &Arc<Mutex<State>>) -> String {
         match self {
             Argument::Name(n) => n.clone(),
-            Argument::Variable(variable) => get_variable(variable.name.clone()),
+            Argument::Variable(variable) => get_variable(variable.name.clone(), state),
             Argument::SubShell(ss) => ss.stdout(),
-            Argument::Merge(merge) => merge.eval(),
+            Argument::Merge(merge) => merge.eval(state),
+            Argument::Expansion(expansion) => expansion.eval(state),
         }
     }
 }
@@ -361,8 +445,13 @@ impl Argument {
 //     //SubShellExpr(SubShellExpr)
 // }
 
-fn get_variable(var: String) -> String {
-    env::var(var).unwrap_or_default()
+fn get_variable(var: String, state: &Arc<Mutex<State>>) -> String {
+    match var.as_str() {
+        "0" => String::from("slush"),
+        "!" => process::id().to_string(),
+        "?" => state.lock().unwrap().prev_status.to_string(),
+        _ => env::var(var).unwrap_or_default(),
+    }
 }
 
 fn wait_with_output(child: &SharedChild) -> Output {

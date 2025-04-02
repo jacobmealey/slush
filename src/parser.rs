@@ -1,7 +1,7 @@
 pub mod tokenizer;
 use crate::expr::{
-    AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, IfExpr, MergeExpr, OrIf,
-    PipeLineExpr, State, SubShellExpr, VariableLookup,
+    AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, ExpansionExpr, IfBranch,
+    IfExpr, MergeExpr, OrIf, PipeLineExpr, State, SubShellExpr, VariableLookup,
 };
 use std::sync::{Arc, Mutex};
 
@@ -65,13 +65,13 @@ impl Parser {
         let mut left = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
         while self.current_is(ShTokenType::AndIf) || self.current_is(ShTokenType::OrIf) {
             if self.current_is(ShTokenType::AndIf) {
-                self.consume(ShTokenType::AndIf);
+                self.consume(ShTokenType::AndIf)?;
                 let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
                 left = AndOrNode::Andif(Box::new(AndIf { left, right }));
             }
             // these feels yucky - how do we get these two nearly identical blocks
             if self.current_is(ShTokenType::OrIf) {
-                self.consume(ShTokenType::OrIf);
+                self.consume(ShTokenType::OrIf)?;
                 self.skip_whitespace();
                 let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
                 left = AndOrNode::Orif(Box::new(OrIf { left, right }));
@@ -90,7 +90,7 @@ impl Parser {
             _ => CompoundList::Commandexpr(self.parse_command()?),
         });
         while self.current_is(ShTokenType::Pipe) {
-            self.consume(ShTokenType::Pipe);
+            self.consume(ShTokenType::Pipe)?;
             pipeline.push(match self.current.token_type {
                 ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
                 //ShTokenType::Function => self.parse_function()?,
@@ -110,31 +110,39 @@ impl Parser {
         })
     }
 
+    // parse_if builds out entire if/elif/else chain.
     fn parse_if(&mut self) -> Result<IfExpr, String> {
-        self.consume(ShTokenType::If);
+        if self.current_is(ShTokenType::If) {
+            self.consume(ShTokenType::If)?;
+        } else if self.current_is(ShTokenType::Elif) {
+            self.consume(ShTokenType::Elif)?;
+        }
         let condition = self.parse_pipeline()?;
-        self.consume(ShTokenType::SemiColon);
-        self.consume(ShTokenType::Then);
+        self.consume(ShTokenType::SemiColon)?;
+        self.consume(ShTokenType::Then)?;
         self.skip_whitespace_newlines();
         let mut if_branch: Vec<PipeLineExpr> = Vec::new();
-        let mut else_branch: Option<Vec<PipeLineExpr>> = None;
+        let mut else_branch: Option<IfBranch> = None;
         while !self.current_is(ShTokenType::Fi)
             && !self.current_is(ShTokenType::Else)
-            && !self.current_is(ShTokenType::EndOfFile)
+            && !self.current_is(ShTokenType::Elif)
         {
             if_branch.push(self.parse_pipeline()?);
             self.next_token();
         }
 
         self.skip_whitespace_newlines();
-        if self.current_is(ShTokenType::Else) {
-            self.consume(ShTokenType::Else);
+        if self.current_is(ShTokenType::Elif) {
+            else_branch = Some(IfBranch::Elif(Box::new(self.parse_if()?)));
+        } else if self.current_is(ShTokenType::Else) {
+            self.consume(ShTokenType::Else)?;
             let mut commands: Vec<PipeLineExpr> = Vec::new();
-            while !self.current_is(ShTokenType::Fi) && !self.current_is(ShTokenType::EndOfFile) {
+            while !self.current_is(ShTokenType::Fi) {
+                self.skip_whitespace_newlines();
                 commands.push(self.parse_pipeline()?);
                 self.next_token();
             }
-            else_branch = Some(commands);
+            else_branch = Some(IfBranch::Else(commands));
         }
 
         Ok(IfExpr {
@@ -246,10 +254,52 @@ impl Parser {
         Ok(None)
     }
 
+    fn parse_expansion(&mut self) -> Result<ExpansionExpr, String> {
+        self.next_token();
+        if self.current_is(ShTokenType::Pound) {
+            println!("huh?");
+            self.next_token();
+            if !self.current_is(ShTokenType::Name) {
+                return Err(String::from("Expected a name after '#'"));
+            }
+
+            return Ok(ExpansionExpr::StringLengthExpansion(
+                self.current.lexeme.clone(),
+            ));
+        } else if self.current_is(ShTokenType::Name) {
+            // we are doing some type expansion thiny
+            let name = self.current.lexeme.clone();
+            self.next_token();
+            if self.current_is(ShTokenType::UseDefault) {
+                self.next_token();
+                let default = self.collect_until(ShTokenType::RightBrace)?;
+                return Ok(ExpansionExpr::ParameterSubstitute(name, default));
+            } else if self.current_is(ShTokenType::AssignDefault) {
+                self.next_token();
+                let default = self.collect_until(ShTokenType::RightBrace)?;
+                return Ok(ExpansionExpr::ParameterAssign(name, default));
+            } else if self.current_is(ShTokenType::ErrorOn) {
+                self.next_token();
+                let default = self.collect_until(ShTokenType::RightBrace)?;
+                return Ok(ExpansionExpr::ParameterError(name, default));
+            } else if self.current_is(ShTokenType::UseNullOrDefault) {
+                self.next_token();
+                let default = self.collect_until(ShTokenType::RightBrace)?;
+                return Ok(ExpansionExpr::ParameterExpansion(default));
+            } else {
+                let default = self.collect_until(ShTokenType::RightBrace)?;
+                return Ok(ExpansionExpr::ParameterExpansion(default));
+            }
+        }
+
+        self.consume(ShTokenType::RightBrace)?;
+        Err(String::from("Error parsing expansion"))
+    }
+
     fn parse_redirect(&mut self) -> Result<Option<Argument>, String> {
         self.skip_whitespace();
         if self.current_is(ShTokenType::RedirectOut) {
-            self.consume(ShTokenType::RedirectOut);
+            self.consume(ShTokenType::RedirectOut)?;
             let filename = self.parse_argument()?;
             return Ok(filename);
         }
@@ -259,7 +309,7 @@ impl Parser {
     fn parse_control(&mut self) -> bool {
         self.skip_whitespace();
         if self.current_is(ShTokenType::Control) {
-            self.consume(ShTokenType::Control);
+            let _ = self.consume(ShTokenType::Control);
             return true;
         }
         false
@@ -285,9 +335,13 @@ impl Parser {
                         shell: self
                             .collect_matching(ShTokenType::LeftParen, ShTokenType::RightParen)?,
                     }))),
+                    ShTokenType::LeftBrace => {
+                        Ok(Some(Argument::Expansion(self.parse_expansion()?)))
+                    }
                     _ => Err("Expected some value after '$'".to_string()),
                 }
             }
+
             ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
                 shell: self.current.lexeme.clone(),
             }))),
@@ -296,6 +350,7 @@ impl Parser {
             // translate the individual lexeme to a named argument
             ShTokenType::Fi
             | ShTokenType::Else
+            | ShTokenType::Elif
             | ShTokenType::If
             | ShTokenType::Do
             | ShTokenType::For
@@ -304,7 +359,18 @@ impl Parser {
             | ShTokenType::Case
             | ShTokenType::Esac
             | ShTokenType::Then => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
-            _ => Ok(None),
+            ShTokenType::WhiteSpace
+            | ShTokenType::NewLine
+            | ShTokenType::SemiColon
+            | ShTokenType::AndIf
+            | ShTokenType::OrIf
+            | ShTokenType::Pipe
+            | ShTokenType::RedirectOut
+            | ShTokenType::Control
+            | ShTokenType::RightParen
+            | ShTokenType::LeftParen
+            | ShTokenType::EndOfFile => Ok(None),
+            _ => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
         }
     }
 
@@ -350,17 +416,36 @@ impl Parser {
         Ok(ret)
     }
 
+    fn collect_until(&mut self, stop: ShTokenType) -> Result<String, String> {
+        let mut ret: String = String::new();
+        while !self.current_is(stop) {
+            if self.current_is(ShTokenType::EndOfFile) {
+                return Err(format!(
+                    "Syntax Error: Unexpected end of file, no matching '{:?}'",
+                    stop
+                ));
+            }
+            ret.push_str(&self.current.lexeme);
+            self.next_token();
+        }
+        Ok(ret)
+    }
+
     fn current_is(&self, check: ShTokenType) -> bool {
         self.current.token_type == check
     }
 
-    fn consume(&mut self, token: ShTokenType) -> bool {
+    fn consume(&mut self, token: ShTokenType) -> Result<(), String> {
         self.skip_whitespace();
         if self.current_is(token) {
             self.next_token();
-            return true;
+            Ok(())
+        } else {
+            Err(format!(
+                "Syntax error: Expected a token {:?}, but found {:?}",
+                token, self.current.lexeme
+            ))
         }
-        false
     }
 
     fn next_token(&mut self) {
@@ -803,7 +888,7 @@ mod test {
                     background: false,
                     state: expr::State::new(),
                 }]),
-                else_branch: Some(Vec::from([PipeLineExpr {
+                else_branch: Some(IfBranch::Else(Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("echo".to_string()),
                         arguments: Vec::from([Argument::Name("goodbye world".to_string())]),
@@ -813,7 +898,7 @@ mod test {
                     file_redirect: None,
                     background: false,
                     state: expr::State::new(),
-                }])),
+                }]))),
             })]),
             capture_out: None,
             file_redirect: None,
@@ -851,6 +936,160 @@ mod test {
         parser.parse(&line);
         println!("{:#?}", parser.exprs);
         // println!("{:#?}", golden_set);
+        assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_if_elif_else() {
+        let line = "if true; then\n exit 1\nelif false; then\n exit 2\nelse\n exit 3\nfi";
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CompoundList::Ifexpr(IfExpr {
+                condition: PipeLineExpr {
+                    pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                        command: Argument::Name("true".to_string()),
+                        arguments: Vec::new(),
+                        assignment: None,
+                    })]),
+                    capture_out: None,
+                    file_redirect: None,
+                    background: false,
+                    state: expr::State::new(),
+                },
+                if_branch: Vec::from([PipeLineExpr {
+                    pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                        command: Argument::Name("exit".to_string()),
+                        arguments: Vec::from([Argument::Name("1".to_string())]),
+                        assignment: None,
+                    })]),
+                    capture_out: None,
+                    file_redirect: None,
+                    background: false,
+                    state: expr::State::new(),
+                }]),
+                else_branch: Some(expr::IfBranch::Elif(Box::new(IfExpr {
+                    condition: PipeLineExpr {
+                        pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                            command: Argument::Name("false".to_string()),
+                            arguments: Vec::new(),
+                            assignment: None,
+                        })]),
+                        capture_out: None,
+                        file_redirect: None,
+                        background: false,
+                        state: expr::State::new(),
+                    },
+                    if_branch: Vec::from([PipeLineExpr {
+                        pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                            command: Argument::Name("exit".to_string()),
+                            arguments: Vec::from([Argument::Name("2".to_string())]),
+                            assignment: None,
+                        })]),
+                        capture_out: None,
+                        file_redirect: None,
+                        background: false,
+                        state: expr::State::new(),
+                    }]),
+                    else_branch: Some(IfBranch::Else(Vec::from([PipeLineExpr {
+                        pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                            command: Argument::Name("exit".to_string()),
+                            arguments: Vec::from([Argument::Name("3".to_string())]),
+                            assignment: None,
+                        })]),
+                        capture_out: None,
+                        file_redirect: None,
+                        background: false,
+                        state: expr::State::new(),
+                    }]))),
+                }))),
+            })]),
+            capture_out: None,
+            file_redirect: None,
+            background: false,
+            state: expr::State::new(),
+        }))]);
+        parser.parse(&line);
+        println!("---- Parser Tree ----");
+        println!("{:#?}", parser.exprs);
+        println!("---- Golden Tree ----");
+        println!("{:#?}", golden_set);
+        //
+        assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_if_elif() {
+        let line = "if true; then\n exit 1\nelif false; then\n exit 2\nfi";
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CompoundList::Ifexpr(IfExpr {
+                condition: PipeLineExpr {
+                    pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                        command: Argument::Name("true".to_string()),
+                        arguments: Vec::new(),
+                        assignment: None,
+                    })]),
+                    capture_out: None,
+                    file_redirect: None,
+                    background: false,
+                    state: expr::State::new(),
+                },
+                if_branch: Vec::from([PipeLineExpr {
+                    pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                        command: Argument::Name("exit".to_string()),
+                        arguments: Vec::from([Argument::Name("1".to_string())]),
+                        assignment: None,
+                    })]),
+                    capture_out: None,
+                    file_redirect: None,
+                    background: false,
+                    state: expr::State::new(),
+                }]),
+                else_branch: Some(IfBranch::Elif(Box::new(IfExpr {
+                    condition: PipeLineExpr {
+                        pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                            command: Argument::Name("false".to_string()),
+                            arguments: Vec::new(),
+                            assignment: None,
+                        })]),
+                        capture_out: None,
+                        file_redirect: None,
+                        background: false,
+                        state: expr::State::new(),
+                    },
+                    if_branch: Vec::from([PipeLineExpr {
+                        pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                            command: Argument::Name("exit".to_string()),
+                            arguments: Vec::from([Argument::Name("2".to_string())]),
+                            assignment: None,
+                        })]),
+                        capture_out: None,
+                        file_redirect: None,
+                        background: false,
+                        state: expr::State::new(),
+                    }]),
+                    else_branch: None,
+                }))),
+            })]),
+            capture_out: None,
+            file_redirect: None,
+            background: false,
+            state: expr::State::new(),
+        }))]);
+        parser.parse(&line);
+        println!("---- Parser Tree ----");
+        println!("{:#?}", parser.exprs);
+        println!("---- Golden Tree ----");
+        println!("{:#?}", golden_set);
+        //
         assert!(parser.err.is_empty());
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));

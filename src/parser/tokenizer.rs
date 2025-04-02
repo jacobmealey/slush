@@ -5,22 +5,17 @@ use std::str::Chars;
 pub enum ShTokenType {
     NewLine,
     WhiteSpace,
-    EndOfFile,  // EOF
-    BackSlash,  // \
-    DollarSign, // $
-    LeftParen,  // (
-    RightParen, // )
-    //    LeftBracket,        // [
-    //    RightBracket,       // ]
+    EndOfFile,          // EOF
+    DollarSign,         // $
+    LeftParen,          // (
+    RightParen,         // )
     DoubleLeftBracket,  // [[
     DoubleRightBracket, // ]]
     LeftBrace,          // {
     RightBrace,         // }
-    Bang,               // !
     AtSign,             // @
     Star,               // *
     Pound,              // #
-    QuestionMark,       // ?
     Tilde,              // ~
     Pipe,               // |
     Control,            // &
@@ -51,6 +46,10 @@ pub enum ShTokenType {
     Name,
     DoubleQuoteStr,
     BackTickStr,
+    UseDefault,       // ${parameter:-[word]}}
+    AssignDefault,    //${parameter:=[word]}}
+    ErrorOn,          // ${parameter:?[word]}}
+    UseNullOrDefault, // ${parameter:+[word]}}
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -59,12 +58,12 @@ pub struct Token {
     pub token_type: ShTokenType,
 }
 
-pub fn is_delemiter(c: char) -> bool {
-    let delimeter_set = HashSet::from([
+pub fn is_delimiter(c: char) -> bool {
+    let delimiter_set = HashSet::from([
         ' ', '\t', '$', '\\', '\'', '(', ')', '{', '}', '[', ']', '!', '@', '*', '#', '?', '~',
-        '|', '>', '<', '`', '"', '&', '=', '\n', ';',
+        '|', '>', '<', '`', '"', '&', '=', '\n', ';', ':', '-', '+',
     ]);
-    delimeter_set.contains(&c)
+    delimiter_set.contains(&c)
 }
 
 pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
@@ -116,6 +115,15 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
     };
     let mut it = st.chars().peekable();
     while let Some(c) = it.next() {
+        if c == '#' {
+            // this is ugly
+            for cc in it.by_ref() {
+                if cc == '\n' {
+                    break;
+                }
+            }
+            continue;
+        }
         let token = match c {
             '\n' => Token {
                 lexeme: String::from(c),
@@ -125,10 +133,24 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
                 lexeme: String::from(c),
                 token_type: ShTokenType::WhiteSpace,
             },
-            '\\' => Token {
-                lexeme: String::from(c),
-                token_type: ShTokenType::BackSlash,
-            },
+            '\\' => {
+                if let Some(cc) = it.next() {
+                    match cc {
+                        '\n' | ' ' => {
+                            continue;
+                        }
+                        _ => Token {
+                            lexeme: String::from(cc),
+                            token_type: ShTokenType::Name,
+                        },
+                    }
+                } else {
+                    Token {
+                        lexeme: String::from(""),
+                        token_type: ShTokenType::EndOfFile,
+                    }
+                }
+            }
             '$' => Token {
                 lexeme: String::from(c),
                 token_type: ShTokenType::DollarSign,
@@ -161,10 +183,6 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
                 lexeme: String::from(c),
                 token_type: ShTokenType::RightBrace,
             },
-            '!' => Token {
-                lexeme: String::from(c),
-                token_type: ShTokenType::Bang,
-            },
             '@' => Token {
                 lexeme: String::from(c),
                 token_type: ShTokenType::AtSign,
@@ -176,10 +194,6 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
             '#' => Token {
                 lexeme: String::from(c),
                 token_type: ShTokenType::Pound,
-            },
-            '?' => Token {
-                lexeme: String::from(c),
-                token_type: ShTokenType::QuestionMark,
             },
             '~' => Token {
                 lexeme: String::from(c),
@@ -193,6 +207,40 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
                 lexeme: String::from(c),
                 token_type: ShTokenType::SemiColon,
             },
+            ':' => {
+                let tok: Token;
+                if it.peek().is_some() && *it.peek().expect("No char?") == '-' {
+                    tok = Token {
+                        lexeme: String::from(":-"),
+                        token_type: ShTokenType::UseDefault,
+                    };
+                    it.next();
+                } else if it.peek().is_some() && *it.peek().expect("No char?") == '=' {
+                    tok = Token {
+                        lexeme: String::from(":="),
+                        token_type: ShTokenType::AssignDefault,
+                    };
+                    it.next();
+                } else if it.peek().is_some() && *it.peek().expect("No char?") == '?' {
+                    tok = Token {
+                        lexeme: String::from(":?"),
+                        token_type: ShTokenType::ErrorOn,
+                    };
+                    it.next();
+                } else if it.peek().is_some() && *it.peek().expect("No char?") == '+' {
+                    tok = Token {
+                        lexeme: String::from(":+"),
+                        token_type: ShTokenType::UseNullOrDefault,
+                    };
+                    it.next();
+                } else {
+                    tok = Token {
+                        lexeme: String::from(c),
+                        token_type: ShTokenType::Name,
+                    };
+                }
+                tok
+            }
             '[' => {
                 let tok: Token;
                 if it.peek().is_some() && *it.peek().expect("No char?") == '[' {
@@ -280,7 +328,7 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
             _ => {
                 current = String::from(c);
                 while let Some(cc) = it.peek() {
-                    if !cc.is_whitespace() && !is_delemiter(*cc) {
+                    if !cc.is_whitespace() && !is_delimiter(*cc) {
                         current.push(*cc);
                         it.next();
                     } else {
@@ -306,6 +354,7 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
             tokens.push(token);
         }
     }
+
     Ok(tokens)
 }
 

@@ -1,0 +1,21 @@
+#!/usr/local/bin/slush
+echo hello world
+
+CC=gcc
+
+if [ -f afile ]; then
+    echo '===== we are in da if statement ====='
+    echo 'another statement'
+elif [ -f bfile ]; then
+    echo 'elif elif elif'
+else
+    echo 'we are in the else statement'
+fi
+
+echo 'hello' \
+    'old world'
+
+
+echo $CC
+echo hello
+
