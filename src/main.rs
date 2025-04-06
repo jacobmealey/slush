@@ -1,13 +1,30 @@
 use crate::parser::tokenizer;
+use nix::sys::signal;
 use std::env;
 use std::io::{self, BufRead, Write};
+use std::sync::{Arc, LazyLock, Mutex};
 mod expr;
 mod parser;
+
+static PRUNE_JOBS: LazyLock<Arc<Mutex<bool>>> =
+    std::sync::LazyLock::new(|| Arc::new(Mutex::new(false)));
+
+pub extern "C" fn sigchld_handler(_signum: i32) {
+    let mut jobs = PRUNE_JOBS.lock().unwrap();
+    *jobs = true;
+}
 
 fn repl() {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
     let state = expr::State::new();
+    unsafe {
+        signal::signal(
+            signal::Signal::SIGCHLD,
+            signal::SigHandler::Handler(sigchld_handler),
+        )
+        .expect("Error setting signal handler");
+    }
     if let Some(arg) = env::args().nth(1) {
         let code_str = std::fs::read_to_string(arg).expect("Error reading file");
         let s = state.clone();
@@ -39,6 +56,11 @@ fn repl() {
         })
         .expect("Error ignoring control C");
         loop {
+            if *PRUNE_JOBS.lock().unwrap() {
+                let mut jobs = state.lock().unwrap();
+                jobs.fg_jobs.retain(|job| job.try_wait().unwrap().is_some());
+                *PRUNE_JOBS.lock().unwrap() = false;
+            }
             print!("[{}] $ ", state.lock().unwrap().prev_status);
             stdout.flush().expect("Error flushing to stdout");
             let line = match stdin.lock().lines().next() {

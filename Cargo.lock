@@ -63,6 +63,7 @@ name = "slush"
 version = "0.1.0"
 dependencies = [
  "ctrlc",
+ "nix",
  "shared_child",
 ]
 

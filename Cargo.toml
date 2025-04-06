@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 ctrlc = "3.4.5"
 shared_child = "1.0"
+nix = "*"
