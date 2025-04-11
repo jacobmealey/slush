@@ -1,7 +1,7 @@
 pub mod tokenizer;
 use crate::expr::{
     AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, ExpansionExpr, IfBranch,
-    IfExpr, MergeExpr, OrIf, PipeLineExpr, State, SubShellExpr, VariableLookup,
+    IfExpr, MergeExpr, OrIf, PipeLineExpr, State, SubShellExpr, VariableLookup, WhileExpr,
 };
 use std::sync::{Arc, Mutex};
 
@@ -86,6 +86,7 @@ impl Parser {
         let mut pipeline: Vec<CompoundList> = Vec::new();
         pipeline.push(match self.current.token_type {
             ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
+            ShTokenType::While => CompoundList::Whileexpr(self.parse_while()?),
             //ShTokenType::Function => self.parse_function()?,
             _ => CompoundList::Commandexpr(self.parse_command()?),
         });
@@ -93,6 +94,7 @@ impl Parser {
             self.consume(ShTokenType::Pipe)?;
             pipeline.push(match self.current.token_type {
                 ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
+                ShTokenType::While => CompoundList::Whileexpr(self.parse_while()?),
                 //ShTokenType::Function => self.parse_function()?,
                 _ => CompoundList::Commandexpr(self.parse_command()?),
             });
@@ -131,6 +133,15 @@ impl Parser {
             self.next_token();
         }
 
+        if self.current_is(ShTokenType::Fi) {
+            self.consume(ShTokenType::Fi)?;
+            return Ok(IfExpr {
+                condition,
+                if_branch,
+                else_branch,
+            });
+        }
+
         self.skip_whitespace_newlines();
         if self.current_is(ShTokenType::Elif) {
             else_branch = Some(IfBranch::Elif(Box::new(self.parse_if()?)));
@@ -150,6 +161,25 @@ impl Parser {
             if_branch,
             else_branch,
         })
+    }
+
+    fn parse_while(&mut self) -> Result<WhileExpr, String> {
+        if self.current_is(ShTokenType::While) {
+            self.consume(ShTokenType::While)?;
+        }
+        let condition = self.parse_pipeline()?;
+        self.consume(ShTokenType::SemiColon)?;
+        self.consume(ShTokenType::Do)?;
+        self.skip_whitespace_newlines();
+        let mut body: Vec<PipeLineExpr> = Vec::new();
+        while !self.current_is(ShTokenType::Done) {
+            let vv = self.parse_pipeline()?;
+            body.push(vv);
+            self.next_token();
+        }
+        self.consume(ShTokenType::Done)?;
+
+        Ok(WhileExpr { condition, body })
     }
 
     // fn parse_function(&mut self) -> Result<FunctionExpr, String> {
@@ -228,13 +258,30 @@ impl Parser {
         if self.current.token_type == ShTokenType::Name {
             key = self.current.lexeme.clone();
             self.next_token();
-            if self.current.token_type == ShTokenType::Equal {
+            while !self.current_is(ShTokenType::WhiteSpace)
+                && !self.current_is(ShTokenType::NewLine)
+            {
                 self.next_token();
+                if self.current_is(ShTokenType::Equal) {
+                    self.consume(ShTokenType::Equal)?;
+                }
                 // an assignment can be a string, an @VAR or a direct token
-                val = Some(match self.parse_argument()? {
-                    Some(a) => a,
-                    None => Argument::Name(String::from("")),
-                });
+                match self.parse_argument()? {
+                    Some(a) => {
+                        if val.is_some() {
+                            let l = val.take().unwrap();
+                            val = Some(Argument::Merge(MergeExpr {
+                                left: Box::new(l),
+                                right: Box::new(a),
+                            }));
+                        } else {
+                            val = Some(a);
+                        }
+                    }
+                    None => {
+                        break;
+                    } // ignore all tokens until a delimiting token
+                };
             }
         }
         self.next_token();
@@ -363,6 +410,7 @@ impl Parser {
             | ShTokenType::NewLine
             | ShTokenType::SemiColon
             | ShTokenType::AndIf
+            | ShTokenType::Done
             | ShTokenType::OrIf
             | ShTokenType::Pipe
             | ShTokenType::RedirectOut

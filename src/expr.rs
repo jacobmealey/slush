@@ -106,8 +106,26 @@ impl IfExpr {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct WhileExpr {
+    pub condition: PipeLineExpr,
+    pub body: Vec<PipeLineExpr>,
+}
+
+impl WhileExpr {
+    pub fn eval(&mut self) -> i32 {
+        while self.condition.eval() == 0 {
+            for command in &mut self.body {
+                command.eval();
+            }
+        }
+        0
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub enum CompoundList {
     Ifexpr(IfExpr),
+    Whileexpr(WhileExpr),
     Commandexpr(CommandExpr),
 }
 
@@ -234,6 +252,7 @@ impl PipeLineExpr {
         for (i, expr) in self.pipeline.iter_mut().enumerate() {
             match expr {
                 CompoundList::Ifexpr(ifxpr) => ifxpr.eval(),
+                CompoundList::Whileexpr(whlexpr) => whlexpr.eval(),
                 CompoundList::Commandexpr(exp) => {
                     if let Some(ref mut ass) = exp.assignment {
                         ass.eval(&self.state.clone());
