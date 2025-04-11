@@ -16,6 +16,11 @@ echo 'hello' \
     'old world'
 
 
+if true; then
+    exit 1
+elif false; then
+    exit 2
+fi
 echo $CC
 echo hello
 

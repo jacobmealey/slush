@@ -260,6 +260,7 @@ impl Parser {
             self.next_token();
             while !self.current_is(ShTokenType::WhiteSpace)
                 && !self.current_is(ShTokenType::NewLine)
+                && !self.current_is(ShTokenType::SemiColon)
             {
                 self.next_token();
                 if self.current_is(ShTokenType::Equal) {
