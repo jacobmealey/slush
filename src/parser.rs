@@ -55,9 +55,7 @@ impl Parser {
                     self.err += &strn;
                 }
             };
-            if self.current_is(ShTokenType::NewLine) {
-                self.next_token();
-            }
+            self.try_consume(ShTokenType::NewLine);
         }
     }
 
@@ -117,10 +115,8 @@ impl Parser {
 
     // parse_if builds out entire if/elif/else chain.
     fn parse_if(&mut self) -> Result<IfExpr, String> {
-        if self.current_is(ShTokenType::If) {
-            self.consume(ShTokenType::If)?;
-        } else if self.current_is(ShTokenType::Elif) {
-            self.consume(ShTokenType::Elif)?;
+        if !self.try_consume(ShTokenType::If) {
+            self.try_consume(ShTokenType::Elif);
         }
         let condition = self.parse_pipeline()?;
         self.skip_whitespace_newlines();
@@ -157,11 +153,10 @@ impl Parser {
             self.consume(ShTokenType::Else)?;
             self.skip_whitespace_newlines();
             let mut commands: Vec<PipeLineExpr> = Vec::new();
-            while !self.current_is(ShTokenType::Fi) {
+            while !self.try_consume(ShTokenType::Fi) {
                 commands.push(self.parse_pipeline()?);
                 self.next_token();
             }
-            self.consume(ShTokenType::Fi)?;
             else_branch = Some(IfBranch::Else(commands));
         }
 
@@ -179,12 +174,11 @@ impl Parser {
         self.consume(ShTokenType::Do)?;
         self.skip_whitespace_newlines();
         let mut body: Vec<PipeLineExpr> = Vec::new();
-        while !self.current_is(ShTokenType::Done) {
+        while !self.try_consume(ShTokenType::Done) {
             let vv = self.parse_pipeline()?;
             body.push(vv);
             self.next_token();
         }
-        self.consume(ShTokenType::Done)?;
 
         Ok(WhileExpr { condition, body })
     }
@@ -246,9 +240,7 @@ impl Parser {
                 } // ignore all tokens until a delimiting token
             };
         }
-        if self.current_is(ShTokenType::SemiColon) {
-            self.consume(ShTokenType::SemiColon)?;
-        }
+        self.try_consume(ShTokenType::SemiColon);
         Ok(command)
     }
 
@@ -272,9 +264,7 @@ impl Parser {
                 && !self.current_is(ShTokenType::SemiColon)
             {
                 self.next_token();
-                if self.current_is(ShTokenType::Equal) {
-                    self.consume(ShTokenType::Equal)?;
-                }
+                self.try_consume(ShTokenType::Equal);
                 // an assignment can be a string, an @VAR or a direct token
                 match self.parse_argument()? {
                     Some(a) => {
@@ -365,11 +355,7 @@ impl Parser {
 
     fn parse_control(&mut self) -> bool {
         self.skip_whitespace();
-        if self.current_is(ShTokenType::Control) {
-            let _ = self.consume(ShTokenType::Control);
-            return true;
-        }
-        false
+        self.try_consume(ShTokenType::Control)
     }
 
     // Arguments can be A single quoteless string (Name), and quoted string or
@@ -491,6 +477,16 @@ impl Parser {
 
     fn current_is(&self, check: ShTokenType) -> bool {
         self.current.token_type == check
+    }
+
+    fn try_consume(&mut self, token: ShTokenType) -> bool {
+        self.skip_whitespace();
+        if self.current_is(token) {
+            self.next_token();
+            true
+        } else {
+            false
+        }
     }
 
     fn consume(&mut self, token: ShTokenType) -> Result<(), String> {
