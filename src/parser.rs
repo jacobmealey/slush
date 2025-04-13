@@ -136,6 +136,8 @@ impl Parser {
             self.next_token();
         }
 
+        // If we are at the first 'fi' then theres no else branch
+        // so we can just return the if branch with else_branch as None
         if self.current_is(ShTokenType::Fi) {
             self.consume(ShTokenType::Fi)?;
             return Ok(IfExpr {
@@ -146,13 +148,16 @@ impl Parser {
         }
 
         self.skip_whitespace_newlines();
+        // If its an elif then we can recursively parse the elif branch as
+        // calling parse_if will consume the elif token. If its an else
+        // branch we repeat the same process as the if branch
         if self.current_is(ShTokenType::Elif) {
             else_branch = Some(IfBranch::Elif(Box::new(self.parse_if()?)));
         } else if self.current_is(ShTokenType::Else) {
             self.consume(ShTokenType::Else)?;
+            self.skip_whitespace_newlines();
             let mut commands: Vec<PipeLineExpr> = Vec::new();
             while !self.current_is(ShTokenType::Fi) {
-                self.skip_whitespace_newlines();
                 commands.push(self.parse_pipeline()?);
                 self.next_token();
             }
@@ -168,9 +173,7 @@ impl Parser {
     }
 
     fn parse_while(&mut self) -> Result<WhileExpr, String> {
-        if self.current_is(ShTokenType::While) {
-            self.consume(ShTokenType::While)?;
-        }
+        self.consume(ShTokenType::While)?;
         let condition = self.parse_pipeline()?;
         self.skip_whitespace_newlines();
         self.consume(ShTokenType::Do)?;
@@ -275,6 +278,9 @@ impl Parser {
                 // an assignment can be a string, an @VAR or a direct token
                 match self.parse_argument()? {
                     Some(a) => {
+                        // while we still have tokens in the assignment we need
+                        // to construct it at run time by creating MergeExprss
+                        // of the various types of arguments strung together.
                         if val.is_some() {
                             let l = val.take().unwrap();
                             val = Some(Argument::Merge(MergeExpr {
@@ -336,11 +342,10 @@ impl Parser {
                 return Ok(ExpansionExpr::ParameterError(name, default));
             } else if self.current_is(ShTokenType::UseNullOrDefault) {
                 self.next_token();
-                let default = self.collect_until(ShTokenType::RightBrace)?;
-                return Ok(ExpansionExpr::ParameterExpansion(default));
+                return Ok(ExpansionExpr::ParameterExpansion(name));
             } else {
-                let default = self.collect_until(ShTokenType::RightBrace)?;
-                return Ok(ExpansionExpr::ParameterExpansion(default));
+                self.consume(ShTokenType::RightBrace)?;
+                return Ok(ExpansionExpr::ParameterExpansion(name));
             }
         }
 
@@ -1272,6 +1277,33 @@ mod test {
         if !parser.err.is_empty() {
             println!("Error: {}", parser.err);
         }
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_parameter_expansion() {
+        let line = "echo ${PWD}";
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                command: Argument::Name("echo".to_string()),
+                arguments: Vec::from([Argument::Expansion(ExpansionExpr::ParameterExpansion(
+                    "PWD".to_string(),
+                ))]),
+                assignment: None,
+            })]),
+            capture_out: None,
+            file_redirect: None,
+            background: false,
+            state: expr::State::new(),
+        }))]);
+        parser.parse(&line);
+        println!("{:#?}", parser.exprs);
+        // println!("{:#?}", golden_set);
+        assert!(parser.err.is_empty());
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
         }
