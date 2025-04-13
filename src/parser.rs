@@ -90,8 +90,7 @@ impl Parser {
             //ShTokenType::Function => self.parse_function()?,
             _ => CompoundList::Commandexpr(self.parse_command()?),
         });
-        while self.current_is(ShTokenType::Pipe) {
-            self.consume(ShTokenType::Pipe)?;
+        while self.try_consume(ShTokenType::Pipe) {
             pipeline.push(match self.current.token_type {
                 ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
                 ShTokenType::While => CompoundList::Whileexpr(self.parse_while()?),
@@ -188,9 +187,9 @@ impl Parser {
     // }
 
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
-        self.skip_whitespace();
         let assignment = self.parse_assignment()?;
         let mut err: String = "".to_string();
+        self.skip_whitespace();
         let command_name = match self.parse_argument()? {
             Some(a) => a,
             None => {
@@ -202,8 +201,12 @@ impl Parser {
             }
         };
 
-        if err.is_empty() && assignment.is_some() {
-            return Err(err);
+        if !err.is_empty() && assignment.is_some() {
+            return Ok(CommandExpr {
+                command: command_name,
+                arguments: Vec::new(),
+                assignment,
+            });
         }
         let mut command = CommandExpr {
             command: command_name,
@@ -256,15 +259,20 @@ impl Parser {
         let current_location = self.loc;
         let mut key: String = String::from("");
         let mut val: Option<Argument> = None;
-        if self.current.token_type == ShTokenType::Name {
+        if self.current_is(ShTokenType::Name) {
             key = self.current.lexeme.clone();
-            self.next_token();
+            self.next_token(); // skip the key
+            if !self.try_consume(ShTokenType::Equal) {
+                // if we don't have an equal sign then we need to rewind
+                // the token stream to the beginning of the assignment
+                self.loc = current_location;
+                self.current = self.token[self.loc].clone();
+                return Ok(None);
+            }
             while !self.current_is(ShTokenType::WhiteSpace)
                 && !self.current_is(ShTokenType::NewLine)
                 && !self.current_is(ShTokenType::SemiColon)
             {
-                self.next_token();
-                self.try_consume(ShTokenType::Equal);
                 // an assignment can be a string, an @VAR or a direct token
                 match self.parse_argument()? {
                     Some(a) => {
@@ -285,10 +293,10 @@ impl Parser {
                         break;
                     } // ignore all tokens until a delimiting token
                 };
+                self.next_token();
             }
         }
         if let Some(argtype) = val {
-            self.skip_whitespace();
             return Ok(Some(AssignmentExpr { key, val: argtype }));
         } else if current_location < self.token.len() {
             self.loc = current_location;
@@ -299,7 +307,6 @@ impl Parser {
                 self.prev.lexeme
             ));
         }
-        self.skip_whitespace();
         Ok(None)
     }
 
@@ -365,7 +372,6 @@ impl Parser {
     //   $ ls $TEMP_DIR
     //   Made public so the tokenizer can use it?
     pub fn parse_argument(&mut self) -> Result<Option<Argument>, String> {
-        self.skip_whitespace();
         match self.current.token_type {
             ShTokenType::Name => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
             ShTokenType::DollarSign => {
@@ -1290,6 +1296,99 @@ mod test {
                     "PWD".to_string(),
                 ))]),
                 assignment: None,
+            })]),
+            capture_out: None,
+            file_redirect: None,
+            background: false,
+            state: expr::State::new(),
+        }))]);
+        parser.parse(&line);
+        println!("{:#?}", parser.exprs);
+        // println!("{:#?}", golden_set);
+        assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+    #[test]
+    fn test_var_and_expansion() {
+        let line = "echo $X${PWD}";
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                command: Argument::Name("echo".to_string()),
+                arguments: Vec::from([Argument::Merge(MergeExpr {
+                    left: Box::new(Argument::Variable(VariableLookup {
+                        name: "X".to_string(),
+                    })),
+                    right: Box::new(Argument::Expansion(ExpansionExpr::ParameterExpansion(
+                        "PWD".to_string(),
+                    ))),
+                })]),
+                assignment: None,
+            })]),
+            capture_out: None,
+            file_redirect: None,
+            background: false,
+            state: expr::State::new(),
+        }))]);
+        parser.parse(&line);
+        println!("{:#?}", parser.exprs);
+        // println!("{:#?}", golden_set);
+        assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_var_and_expansion_with_subshell() {
+        let line = "echo $X$(pwd)";
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                command: Argument::Name("echo".to_string()),
+                arguments: Vec::from([Argument::Merge(MergeExpr {
+                    left: Box::new(Argument::Variable(VariableLookup {
+                        name: "X".to_string(),
+                    })),
+                    right: Box::new(Argument::SubShell(SubShellExpr {
+                        shell: "pwd".to_string(),
+                    })),
+                })]),
+                assignment: None,
+            })]),
+            capture_out: None,
+            file_redirect: None,
+            background: false,
+            state: expr::State::new(),
+        }))]);
+        parser.parse(&line);
+        println!("{:#?}", parser.exprs);
+        // println!("{:#?}", golden_set);
+        assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_assignment_statement() {
+        let line = "X=1 echo $X";
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                command: Argument::Name("echo".to_string()),
+                arguments: Vec::from([Argument::Variable(VariableLookup {
+                    name: "X".to_string(),
+                })]),
+                assignment: Some(AssignmentExpr {
+                    key: "X".to_string(),
+                    val: Argument::Name("1".to_string()),
+                }),
             })]),
             capture_out: None,
             file_redirect: None,
