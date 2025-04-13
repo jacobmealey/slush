@@ -55,7 +55,9 @@ impl Parser {
                     self.err += &strn;
                 }
             };
-            self.next_token(); // skip a newline
+            if self.current_is(ShTokenType::NewLine) {
+                self.next_token();
+            }
         }
     }
 
@@ -99,6 +101,7 @@ impl Parser {
                 _ => CompoundList::Commandexpr(self.parse_command()?),
             });
         }
+
         self.skip_whitespace();
         let file_redirect = self.parse_redirect()?;
         let background = self.parse_control();
@@ -120,7 +123,7 @@ impl Parser {
             self.consume(ShTokenType::Elif)?;
         }
         let condition = self.parse_pipeline()?;
-        self.consume(ShTokenType::SemiColon)?;
+        self.skip_whitespace_newlines();
         self.consume(ShTokenType::Then)?;
         self.skip_whitespace_newlines();
         let mut if_branch: Vec<PipeLineExpr> = Vec::new();
@@ -153,6 +156,7 @@ impl Parser {
                 commands.push(self.parse_pipeline()?);
                 self.next_token();
             }
+            self.consume(ShTokenType::Fi)?;
             else_branch = Some(IfBranch::Else(commands));
         }
 
@@ -168,7 +172,6 @@ impl Parser {
             self.consume(ShTokenType::While)?;
         }
         let condition = self.parse_pipeline()?;
-        self.consume(ShTokenType::SemiColon)?;
         self.skip_whitespace_newlines();
         self.consume(ShTokenType::Do)?;
         self.skip_whitespace_newlines();
@@ -240,7 +243,9 @@ impl Parser {
                 } // ignore all tokens until a delimiting token
             };
         }
-
+        if self.current_is(ShTokenType::SemiColon) {
+            self.consume(ShTokenType::SemiColon)?;
+        }
         Ok(command)
     }
 
@@ -286,7 +291,6 @@ impl Parser {
                 };
             }
         }
-        self.next_token();
         if let Some(argtype) = val {
             self.skip_whitespace();
             return Ok(Some(AssignmentExpr { key, val: argtype }));
@@ -306,7 +310,6 @@ impl Parser {
     fn parse_expansion(&mut self) -> Result<ExpansionExpr, String> {
         self.next_token();
         if self.current_is(ShTokenType::Pound) {
-            println!("huh?");
             self.next_token();
             if !self.current_is(ShTokenType::Name) {
                 return Err(String::from("Expected a name after '#'"));
@@ -501,7 +504,6 @@ impl Parser {
     fn next_token(&mut self) {
         // this seems really wasteful but the borrow checker beat me up -- how do we change current
         // and prev to be references?
-        // println!("l: {} c: {:?}, p: {:?}", self.loc, self.current, self.prev);
         self.loc += 1;
         if self.loc >= self.token.len() {
             if self.loc > 0 && self.loc - 1 < self.token.len() {
@@ -1229,6 +1231,47 @@ mod test {
         println!("{:#?}", parser.exprs);
         // println!("{:#?}", golden_set);
         assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_semicolon_seperated() {
+        let line = "echo 'hello world'; echo 'goodbye world'";
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
+        let golden_set = Vec::from([
+            AndOrNode::Pipeline(Box::new(PipeLineExpr {
+                pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                    command: Argument::Name("echo".to_string()),
+                    arguments: Vec::from([Argument::Name("hello world".to_string())]),
+                    assignment: None,
+                })]),
+                capture_out: None,
+                file_redirect: None,
+                background: false,
+                state: expr::State::new(),
+            })),
+            AndOrNode::Pipeline(Box::new(PipeLineExpr {
+                pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                    command: Argument::Name("echo".to_string()),
+                    arguments: Vec::from([Argument::Name("goodbye world".to_string())]),
+                    assignment: None,
+                })]),
+                capture_out: None,
+                file_redirect: None,
+                background: false,
+                state: expr::State::new(),
+            })),
+        ]);
+        parser.parse(&line);
+        println!("{:#?}", parser.exprs);
+        // println!("{:#?}", golden_set);
+        assert!(parser.err.is_empty());
+        if !parser.err.is_empty() {
+            println!("Error: {}", parser.err);
+        }
         for (i, expr) in golden_set.into_iter().enumerate() {
             assert!(parser.exprs[i].eq(&expr));
         }

@@ -3,6 +3,10 @@ echo hello world
 
 CC=gcc
 
+if true; then
+    echo '===== first if statement ====='
+fi
+
 if [ -f afile ]; then
     echo '===== we are in da if statement ====='
     echo 'another statement'
