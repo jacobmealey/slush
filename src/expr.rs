@@ -250,6 +250,12 @@ impl PipeLineExpr {
                     if base_command == "cd" {
                         return change_dir::ChangeDir::new(&exp.arguments[0].eval(&self.state))
                             .eval();
+                    } else if base_command == "jobs" {
+                        let opt = exp.arguments.get(0).and_then(|arg| match arg {
+                            Argument::Name(arg) => Some(arg.as_str()),
+                            _ => None
+                        });
+                        print_jobs(opt, &self.state);
                     } else if base_command == "true" {
                         return 0;
                     } else if base_command == "false" {
@@ -500,4 +506,30 @@ pub struct Output {
     status: Option<i32>,
     stdout: Vec<u8>,
     _stderr: Vec<u8>,
+}
+
+fn print_jobs(opt: Option<&str>, state: &Arc<Mutex<State>>) {
+    match opt {
+        None => {
+            let state = state.lock().expect("unable to acquire lock");
+            for (job_num, _job) in state.bg_jobs.iter().enumerate() {
+                println!("[{job_num}] + Running COMMAND\n")
+            }
+        }
+        Some("-l") => {
+            let state = state.lock().expect("unable to acquire lock");
+            for (job_num, _job) in state.bg_jobs.iter().enumerate() {
+                println!("[{job_num}] + GID Running COMMAND\n")
+            }
+        }
+        Some("-p") => {
+            let state = state.lock().expect("unable to acquire lock");
+            for _job in state.bg_jobs.iter() {
+                println!("PID\n")
+            }
+        }
+        Some(opt) => {
+            println!("invalid option: {opt}");
+        }
+    }
 }
