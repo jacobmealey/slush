@@ -13,8 +13,8 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Debug)]
 pub struct State {
-    pub fg_jobs: Vec<Arc<SharedChild>>,
-    pub bg_jobs: Vec<Arc<SharedChild>>,
+    pub fg_jobs: Vec<Job>,
+    pub bg_jobs: Vec<Job>,
     pub prev_status: i32,
 }
 
@@ -217,11 +217,26 @@ impl AssignmentExpr {
 }
 
 impl CommandExpr {
-    pub fn build_command(&self, state: &Arc<Mutex<State>>) -> Box<process::Command> {
+    pub fn build_command_str(&self, state: &Arc<Mutex<State>>) -> CommandStr {
         let com = self.command.eval(state);
-        let mut cmd = Box::new(Command::new(&com));
+        let mut parts = vec![com];
         for arg in &self.arguments {
-            cmd.arg(arg.eval(state));
+            parts.push(arg.eval(state));
+        }
+        CommandStr { parts }
+    }
+}
+
+#[derive(Debug)]
+pub struct CommandStr {
+    parts: Vec<String>,
+}
+
+impl CommandStr {
+    pub fn build_command(&self) -> Box<Command> {
+        let mut cmd = Box::new(Command::new(&self.parts[0]));
+        for arg in &self.parts[1..] {
+            cmd.arg(arg);
         }
         cmd
     }
@@ -253,9 +268,9 @@ impl PipeLineExpr {
                     } else if base_command == "jobs" {
                         let opt = exp.arguments.get(0).and_then(|arg| match arg {
                             Argument::Name(arg) => Some(arg.as_str()),
-                            _ => None
+                            _ => None,
                         });
-                        print_jobs(opt, &self.state);
+                        handle_jobs_cmd(opt, &self.state);
                     } else if base_command == "true" {
                         return 0;
                     } else if base_command == "false" {
@@ -290,7 +305,8 @@ impl PipeLineExpr {
                         return 0;
                     }
 
-                    let mut cmd = exp.build_command(&self.state.clone());
+                    let mut cmd_str = exp.build_command_str(&self.state.clone());
+                    let mut cmd = cmd_str.build_command();
 
                     let mut state = self.state.lock().expect("unable to acquire lock");
 
@@ -318,10 +334,18 @@ impl PipeLineExpr {
                             return 2;
                         }
                     });
+
+                    let child = prev_child.as_ref().unwrap().clone();
+                    let job = Job {
+                        pid: child.id(),
+                        child,
+                        cmd: cmd_str,
+                    };
+
                     if self.background {
-                        state.bg_jobs.push(prev_child.as_ref().unwrap().clone());
+                        state.bg_jobs.push(job);
                     } else {
-                        state.fg_jobs.push(prev_child.as_ref().unwrap().clone());
+                        state.fg_jobs.push(job);
                     }
                     0
                 }
@@ -508,7 +532,7 @@ pub struct Output {
     _stderr: Vec<u8>,
 }
 
-fn print_jobs(opt: Option<&str>, state: &Arc<Mutex<State>>) {
+fn handle_jobs_cmd(opt: Option<&str>, state: &Arc<Mutex<State>>) {
     match opt {
         None => {
             let state = state.lock().expect("unable to acquire lock");
@@ -532,4 +556,11 @@ fn print_jobs(opt: Option<&str>, state: &Arc<Mutex<State>>) {
             println!("invalid option: {opt}");
         }
     }
+}
+
+#[derive(Debug)]
+pub struct Job {
+    pub child: Arc<SharedChild>,
+    pub cmd: CommandStr,
+    pub pid: u32,
 }
