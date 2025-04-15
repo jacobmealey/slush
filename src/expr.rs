@@ -123,6 +123,20 @@ impl WhileExpr {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct NotExpr {
+    pub condition: AndOrNode,
+}
+impl NotExpr {
+    pub fn eval(&mut self) -> i32 {
+        if self.condition.eval() == 0 {
+            1
+        } else {
+            0
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub enum CompoundList {
     Ifexpr(IfExpr),
     Whileexpr(WhileExpr),
@@ -134,6 +148,7 @@ pub enum AndOrNode {
     Pipeline(Box<PipeLineExpr>),
     Andif(Box<AndIf>),
     Orif(Box<OrIf>),
+    Notif(Box<NotExpr>),
 }
 
 impl AndOrNode {
@@ -142,6 +157,7 @@ impl AndOrNode {
             AndOrNode::Pipeline(pl) => pl.eval(),
             AndOrNode::Andif(and) => and.eval(),
             AndOrNode::Orif(or) => or.eval(),
+            AndOrNode::Notif(not) => not.eval(),
         }
     }
 
@@ -150,6 +166,7 @@ impl AndOrNode {
             AndOrNode::Pipeline(pl) => pl.set_output_capture(capture),
             AndOrNode::Andif(and) => and.set_output_capture(capture),
             AndOrNode::Orif(or) => or.set_output_capture(capture),
+            AndOrNode::Notif(not) => not.condition.set_output_capture(capture),
         }
     }
 }

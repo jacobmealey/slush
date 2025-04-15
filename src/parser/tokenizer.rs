@@ -26,6 +26,7 @@ pub enum ShTokenType {
     OrIf,               // ||
     Equal,              // =
     SemiColon,          // ;
+    Bang,               // !
     Case,
     Do,
     Done,
@@ -324,6 +325,10 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
             '<' => Token {
                 lexeme: String::from(c),
                 token_type: ShTokenType::RedirectIn,
+            },
+            '!' => Token {
+                lexeme: String::from(c),
+                token_type: ShTokenType::Bang,
             },
             _ => {
                 current = String::from(c);

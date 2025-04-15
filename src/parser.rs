@@ -1,7 +1,7 @@
 pub mod tokenizer;
 use crate::expr::{
     AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, ExpansionExpr, IfBranch,
-    IfExpr, MergeExpr, OrIf, PipeLineExpr, State, SubShellExpr, VariableLookup, WhileExpr,
+    IfExpr, MergeExpr, NotExpr, OrIf, PipeLineExpr, State, SubShellExpr, VariableLookup, WhileExpr,
 };
 use std::sync::{Arc, Mutex};
 
@@ -62,6 +62,11 @@ impl Parser {
     // the results are a left-associative no precedence
     // list of and / or expressions.
     fn parse_andor_list(&mut self) -> Result<AndOrNode, String> {
+        self.skip_whitespace();
+        let mut not = false;
+        if self.try_consume(ShTokenType::Bang) {
+            not = true;
+        }
         let mut left = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
         while self.current_is(ShTokenType::AndIf) || self.current_is(ShTokenType::OrIf) {
             if self.try_consume(ShTokenType::AndIf) {
@@ -75,7 +80,11 @@ impl Parser {
                 left = AndOrNode::Orif(Box::new(OrIf { left, right }));
             }
         }
+
         self.skip_whitespace();
+        if not {
+            left = AndOrNode::Notif(Box::new(NotExpr { condition: left }));
+        }
         Ok(left)
     }
 
