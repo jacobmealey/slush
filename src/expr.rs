@@ -305,7 +305,7 @@ impl PipeLineExpr {
                         return 0;
                     }
 
-                    let mut cmd_str = exp.build_command_str(&self.state.clone());
+                    let cmd_str = exp.build_command_str(&self.state.clone());
                     let mut cmd = cmd_str.build_command();
 
                     let mut state = self.state.lock().expect("unable to acquire lock");
@@ -536,24 +536,26 @@ fn handle_jobs_cmd(opt: Option<&str>, state: &Arc<Mutex<State>>) {
     match opt {
         None => {
             let state = state.lock().expect("unable to acquire lock");
-            for (job_num, _job) in state.bg_jobs.iter().enumerate() {
-                println!("[{job_num}] + Running COMMAND\n")
-            }
-        }
-        Some("-l") => {
-            let state = state.lock().expect("unable to acquire lock");
-            for (job_num, _job) in state.bg_jobs.iter().enumerate() {
-                println!("[{job_num}] + GID Running COMMAND\n")
+            for (job_num, job) in state.bg_jobs.iter().enumerate() {
+                // Todo: display <current>.
+                print!("[{}] Running", job_num + 1);
+                for part in &job.cmd.parts {
+                    print!(" {part}");
+                }
+                print!("\n");
             }
         }
         Some("-p") => {
             let state = state.lock().expect("unable to acquire lock");
-            for _job in state.bg_jobs.iter() {
-                println!("PID\n")
+            for job in state.bg_jobs.iter() {
+                println!("{}", job.pid);
             }
         }
+        Some("-l") => {
+            println!("The option `-l` is not supported at the moment");
+        }
         Some(opt) => {
-            println!("invalid option: {opt}");
+            println!("invalid option `{opt}`");
         }
     }
 }
