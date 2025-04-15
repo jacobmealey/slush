@@ -1,9 +1,8 @@
 X='c'
 
-while [ $X != 'cccc' ]; do
+while [ ${X} != 'cccccccc' ]; do
     echo $X
     X=$X$X
 done
 
-echo 'X after loop ' $X
-
+echo $X

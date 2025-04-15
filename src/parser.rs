@@ -64,14 +64,12 @@ impl Parser {
     fn parse_andor_list(&mut self) -> Result<AndOrNode, String> {
         let mut left = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
         while self.current_is(ShTokenType::AndIf) || self.current_is(ShTokenType::OrIf) {
-            if self.current_is(ShTokenType::AndIf) {
-                self.consume(ShTokenType::AndIf)?;
+            if self.try_consume(ShTokenType::AndIf) {
                 let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
                 left = AndOrNode::Andif(Box::new(AndIf { left, right }));
             }
             // these feels yucky - how do we get these two nearly identical blocks
-            if self.current_is(ShTokenType::OrIf) {
-                self.consume(ShTokenType::OrIf)?;
+            if self.try_consume(ShTokenType::OrIf) {
                 self.skip_whitespace();
                 let right = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
                 left = AndOrNode::Orif(Box::new(OrIf { left, right }));
@@ -131,25 +129,13 @@ impl Parser {
             self.next_token();
         }
 
-        // If we are at the first 'fi' then theres no else branch
-        // so we can just return the if branch with else_branch as None
-        if self.current_is(ShTokenType::Fi) {
-            self.consume(ShTokenType::Fi)?;
-            return Ok(IfExpr {
-                condition,
-                if_branch,
-                else_branch,
-            });
-        }
-
         self.skip_whitespace_newlines();
         // If its an elif then we can recursively parse the elif branch as
         // calling parse_if will consume the elif token. If its an else
         // branch we repeat the same process as the if branch
         if self.current_is(ShTokenType::Elif) {
             else_branch = Some(IfBranch::Elif(Box::new(self.parse_if()?)));
-        } else if self.current_is(ShTokenType::Else) {
-            self.consume(ShTokenType::Else)?;
+        } else if self.try_consume(ShTokenType::Else) {
             self.skip_whitespace_newlines();
             let mut commands: Vec<PipeLineExpr> = Vec::new();
             while !self.try_consume(ShTokenType::Fi) {
@@ -157,6 +143,11 @@ impl Parser {
                 self.next_token();
             }
             else_branch = Some(IfBranch::Else(commands));
+        }
+
+        self.skip_whitespace_newlines();
+        if else_branch.is_none() {
+            self.consume(ShTokenType::Fi)?;
         }
 
         Ok(IfExpr {
@@ -452,9 +443,9 @@ impl Parser {
                     right
                 ));
             }
-            count += if self.current.token_type == left {
+            count += if self.current_is(left) {
                 1
-            } else if self.current.token_type == right {
+            } else if self.current_is(right) {
                 -1
             } else {
                 0
