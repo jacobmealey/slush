@@ -93,7 +93,7 @@ impl Parser {
         let mut pipeline: Vec<CompoundList> = Vec::new();
         pipeline.push(match self.current.token_type {
             ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
-            ShTokenType::While => CompoundList::Whileexpr(self.parse_while()?),
+            ShTokenType::While | ShTokenType::Until => CompoundList::Whileexpr(self.parse_while()?),
             //ShTokenType::Function => self.parse_function()?,
             _ => CompoundList::Commandexpr(self.parse_command()?),
         });
@@ -167,8 +167,19 @@ impl Parser {
     }
 
     fn parse_while(&mut self) -> Result<WhileExpr, String> {
-        self.consume(ShTokenType::While)?;
-        let condition = self.parse_pipeline()?;
+        let mut not = false;
+        if self.current_is(ShTokenType::Until) {
+            not = true;
+            self.next_token();
+        } else if self.current_is(ShTokenType::While) {
+            self.next_token();
+        } else {
+            return Err(format!(
+                "Syntax error: Expected 'while' or 'until', found {:?}",
+                self.current
+            ));
+        }
+        let mut condition = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
         self.skip_whitespace_newlines();
         self.consume(ShTokenType::Do)?;
         self.skip_whitespace_newlines();
@@ -177,6 +188,12 @@ impl Parser {
             let vv = self.parse_pipeline()?;
             body.push(vv);
             self.next_token();
+        }
+
+        if not {
+            condition = AndOrNode::Notif(Box::new(NotExpr {
+                condition: condition,
+            }));
         }
 
         Ok(WhileExpr { condition, body })
@@ -1162,7 +1179,7 @@ mod test {
         let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Whileexpr(WhileExpr {
-                condition: PipeLineExpr {
+                condition: AndOrNode::Pipeline(Box::new(PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("true".to_string()),
                         arguments: Vec::new(),
@@ -1172,7 +1189,7 @@ mod test {
                     file_redirect: None,
                     background: false,
                     state: expr::State::new(),
-                },
+                })),
                 body: Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("echo".to_string()),
@@ -1206,7 +1223,7 @@ mod test {
         let mut parser = Parser::new(state);
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Whileexpr(WhileExpr {
-                condition: PipeLineExpr {
+                condition: AndOrNode::Pipeline(Box::new(PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("true".to_string()),
                         arguments: Vec::new(),
@@ -1216,7 +1233,7 @@ mod test {
                     file_redirect: None,
                     background: false,
                     state: expr::State::new(),
-                },
+                })),
                 body: Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("echo".to_string()),

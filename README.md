@@ -28,7 +28,8 @@
   - [x] if
   - [x] elif
   - [x] else
-  - [ ] while
+  - [x] while
+  - [x] until
   - [ ] for
 - [x] Lists
   - [x] And-if (`||`)

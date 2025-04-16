@@ -107,7 +107,7 @@ impl IfExpr {
 
 #[derive(Debug, PartialEq)]
 pub struct WhileExpr {
-    pub condition: PipeLineExpr,
+    pub condition: AndOrNode,
     pub body: Vec<PipeLineExpr>,
 }
 
