@@ -191,9 +191,7 @@ impl Parser {
         }
 
         if not {
-            condition = AndOrNode::Notif(Box::new(NotExpr {
-                condition: condition,
-            }));
+            condition = AndOrNode::Notif(Box::new(NotExpr { condition }));
         }
 
         Ok(WhileExpr { condition, body })
