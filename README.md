@@ -15,6 +15,9 @@
   - [ ] Pathname Expansion
 - [x] Basic single quote strings
 - [ ] Double quote strings with substitutions
+- [ ] [File redirects](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_07)
+- [ ] [String Splitting](https://www.shellcheck.net/wiki/SC2086)
+- [ ] Globbing
 - [ ] Environment handling
   - [x] Calling variables
   - [x] Assigning Variables
