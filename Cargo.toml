@@ -7,3 +7,11 @@ edition = "2021"
 ctrlc = "3.4.5"
 shared_child = "1.0"
 nix = "*"
+
+# ensure the release build is as small as possible while
+# still being well optimized.
+[profile.release]
+strip = true
+lto = true
+codegen-untils = 1
+opt-level = 2
