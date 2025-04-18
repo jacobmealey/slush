@@ -40,6 +40,12 @@ pub struct VariableLookup {
     pub name: String,
 }
 
+#[derive(Debug, PartialEq)]
+pub struct RedirectExpr {
+    pub file: Argument,
+    pub append: bool,
+}
+
 // How do we made these outputs streams? it would be nice to have it feed
 // between two child CommandExprs as they are creating them...
 #[derive(Debug, PartialEq)]
@@ -53,7 +59,7 @@ pub struct CommandExpr {
 pub struct PipeLineExpr {
     pub pipeline: Vec<CompoundList>,
     pub capture_out: Option<Rc<RefCell<String>>>,
-    pub file_redirect: Option<Argument>,
+    pub file_redirect: Option<RedirectExpr>,
     pub background: bool,
     pub state: Arc<Mutex<State>>,
 }
@@ -373,10 +379,17 @@ impl PipeLineExpr {
                 exit_status = 0;
             }
         } else if self.file_redirect.is_some() {
-            let filename = self.file_redirect.as_ref().unwrap().eval(&self.state);
-            let mut file = match File::create(filename) {
-                Ok(f) => f,
-                Err(_) => return 1,
+            let filename = self.file_redirect.as_ref().unwrap().file.eval(&self.state);
+            let mut file = if self.file_redirect.as_ref().unwrap().append {
+                match File::options().append(true).open(filename) {
+                    Ok(f) => f,
+                    Err(_) => return 1,
+                }
+            } else {
+                match File::create(filename) {
+                    Ok(f) => f,
+                    Err(_) => return 1,
+                }
             };
             let outie = wait_with_output(&prev_child.unwrap());
             let _ = file.write_all(&outie.stdout.clone());

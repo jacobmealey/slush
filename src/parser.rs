@@ -1,7 +1,8 @@
 pub mod tokenizer;
 use crate::expr::{
     AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, ExpansionExpr, IfBranch,
-    IfExpr, MergeExpr, NotExpr, OrIf, PipeLineExpr, State, SubShellExpr, VariableLookup, WhileExpr,
+    IfExpr, MergeExpr, NotExpr, OrIf, PipeLineExpr, RedirectExpr, State, SubShellExpr,
+    VariableLookup, WhileExpr,
 };
 use std::sync::{Arc, Mutex};
 
@@ -235,6 +236,7 @@ impl Parser {
             && self.current.token_type != ShTokenType::AndIf
             && self.current.token_type != ShTokenType::OrIf
             && self.current.token_type != ShTokenType::RedirectOut
+            && self.current.token_type != ShTokenType::AppendOut
             && self.current.token_type != ShTokenType::Control
         {
             self.next_token();
@@ -365,12 +367,31 @@ impl Parser {
         Err(String::from("Error parsing expansion"))
     }
 
-    fn parse_redirect(&mut self) -> Result<Option<Argument>, String> {
+    fn parse_redirect(&mut self) -> Result<Option<RedirectExpr>, String> {
         self.skip_whitespace();
-        if self.current_is(ShTokenType::RedirectOut) {
-            self.consume(ShTokenType::RedirectOut)?;
-            let filename = self.parse_argument()?;
-            return Ok(filename);
+        let append = if self.try_consume(ShTokenType::RedirectOut) {
+            ShTokenType::RedirectOut
+        } else if self.try_consume(ShTokenType::AppendOut) {
+            ShTokenType::AppendOut
+        } else {
+            ShTokenType::EndOfFile
+        };
+        self.skip_whitespace();
+        if append != ShTokenType::EndOfFile {
+            let file = match self.parse_argument()? {
+                Some(a) => a,
+                None => {
+                    return Err(format!(
+                        "Syntax error: Expected a file name after '{:?}'",
+                        self.current
+                    ))
+                }
+            };
+            self.next_token();
+            return Ok(Some(RedirectExpr {
+                file,
+                append: append == ShTokenType::AppendOut,
+            }));
         }
         Ok(None)
     }
@@ -431,6 +452,7 @@ impl Parser {
             | ShTokenType::OrIf
             | ShTokenType::Pipe
             | ShTokenType::RedirectOut
+            | ShTokenType::AppendOut
             | ShTokenType::Control
             | ShTokenType::RightParen
             | ShTokenType::LeftParen
@@ -1412,6 +1434,64 @@ mod test {
         }))]);
         parser.parse(&line);
         println!("{:#?}", parser.exprs);
+        // println!("{:#?}", golden_set);
+        assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_file_redirect() {
+        let line = "ls > /tmp/file";
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                command: Argument::Name("ls".to_string()),
+                arguments: Vec::new(),
+                assignment: None,
+            })]),
+            capture_out: None,
+            file_redirect: Some(RedirectExpr {
+                file: expr::Argument::Name("/tmp/file".to_string()),
+                append: false,
+            }),
+            background: false,
+            state: expr::State::new(),
+        }))]);
+        parser.parse(&line);
+        println!("{:#?}", parser.exprs);
+
+        // println!("{:#?}", golden_set);
+        assert!(parser.err.is_empty());
+        for (i, expr) in golden_set.into_iter().enumerate() {
+            assert!(parser.exprs[i].eq(&expr));
+        }
+    }
+
+    #[test]
+    fn test_file_append() {
+        let line = "ls >> /tmp/file";
+        let state = expr::State::new();
+        let mut parser = Parser::new(state);
+        let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
+            pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
+                command: Argument::Name("ls".to_string()),
+                arguments: Vec::new(),
+                assignment: None,
+            })]),
+            capture_out: None,
+            file_redirect: Some(RedirectExpr {
+                file: expr::Argument::Name("/tmp/file".to_string()),
+                append: true,
+            }),
+            background: false,
+            state: expr::State::new(),
+        }))]);
+        parser.parse(&line);
+        println!("{:#?}", parser.exprs);
+
         // println!("{:#?}", golden_set);
         assert!(parser.err.is_empty());
         for (i, expr) in golden_set.into_iter().enumerate() {
