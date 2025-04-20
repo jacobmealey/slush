@@ -2,6 +2,7 @@ use crate::parser::tokenizer;
 use nix::sys::signal;
 use std::env;
 use std::io::{self, BufRead, Write};
+use std::panic;
 use std::sync::{Arc, LazyLock, Mutex};
 mod expr;
 mod parser;
@@ -18,6 +19,12 @@ fn repl() {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
     let state = expr::State::new();
+
+    panic::set_hook(Box::new(|panic_info| {
+        println!("one or more internal error occurred while running slush.");
+        println!("Panic Info: {}", panic_info);
+    }));
+
     unsafe {
         signal::signal(
             signal::Signal::SIGCHLD,
