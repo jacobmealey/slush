@@ -40,10 +40,18 @@ pub struct VariableLookup {
     pub name: String,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum RedirectType {
+    Out,
+    OutAppend,
+    In,
+}
+
 #[derive(Debug, PartialEq)]
 pub struct RedirectExpr {
     pub file: Argument,
-    pub append: bool,
+    pub mode: RedirectType,
+    pub file_descriptor: u32,
 }
 
 // How do we made these outputs streams? it would be nice to have it feed
@@ -333,7 +341,17 @@ impl PipeLineExpr {
                     if let Some(pchild) = prev_child {
                         cmd.stdin(pchild.take_stdout().unwrap());
                     }
-                    if i < sz - 1 || self.capture_out.is_some() || self.file_redirect.is_some() {
+                    if let Some(file_redirect) = &self.file_redirect {
+                        if file_redirect.mode == RedirectType::In {
+                            cmd.stdin(Stdio::piped());
+                        }
+                    }
+
+                    if i < sz - 1
+                        || self.capture_out.is_some()
+                        || (self.file_redirect.as_ref().is_some()
+                            && self.file_redirect.as_ref().unwrap().mode != RedirectType::In)
+                    {
                         cmd.stdout(Stdio::piped());
                     }
 
@@ -379,20 +397,63 @@ impl PipeLineExpr {
                 exit_status = 0;
             }
         } else if self.file_redirect.is_some() {
-            let filename = self.file_redirect.as_ref().unwrap().file.eval(&self.state);
-            let mut file = if self.file_redirect.as_ref().unwrap().append {
+            let file_redirect = self.file_redirect.as_ref().unwrap();
+
+            let filename = file_redirect.file.eval(&self.state);
+            let mode = &file_redirect.mode;
+            // will these error silently?
+            let mut file = if *mode == RedirectType::OutAppend {
                 match File::options().append(true).open(filename) {
                     Ok(f) => f,
                     Err(_) => return 1,
                 }
-            } else {
+            } else if *mode == RedirectType::Out {
                 match File::create(filename) {
                     Ok(f) => f,
                     Err(_) => return 1,
                 }
+            } else if *mode == RedirectType::In {
+                match File::open(filename) {
+                    Ok(f) => f,
+                    Err(_) => return 1,
+                }
+            } else {
+                println!("Unexpected for redirect! Error Error!");
+                return 1;
             };
-            let outie = wait_with_output(&prev_child.unwrap());
-            let _ = file.write_all(&outie.stdout.clone());
+            if *mode == RedirectType::In {
+                println!("is this happening?");
+                let mut buffer: Box<[u8]> = Box::new([0; 4096]);
+                let mut stdin = match prev_child.clone().unwrap().take_stdin() {
+                    Some(s) => s,
+                    None => {
+                        println!("couldn't acquire stdin of process...");
+                        return 1;
+                    }
+                };
+
+                loop {
+                    let n = match file.read(&mut buffer) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            println!("{:?}", e);
+                            return 1;
+                        }
+                    };
+                    if n == 0 {
+                        break;
+                    }
+                    if let Err(e) = stdin.write(&buffer[..n]) {
+                        println!("Error writing to stdin: {}", e);
+                    }
+                }
+                drop(stdin);
+                let status = prev_child.unwrap().wait().unwrap();
+                exit_status = status.code().unwrap_or(130);
+            } else {
+                let outie = wait_with_output(&prev_child.unwrap());
+                let _ = file.write_all(&outie.stdout.clone());
+            }
         } else if prev_child.is_some() {
             if !self.background {
                 let status = prev_child.unwrap().wait().unwrap();

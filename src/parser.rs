@@ -1,8 +1,8 @@
 pub mod tokenizer;
 use crate::expr::{
     AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, ExpansionExpr, IfBranch,
-    IfExpr, MergeExpr, NotExpr, OrIf, PipeLineExpr, RedirectExpr, State, SubShellExpr,
-    VariableLookup, WhileExpr,
+    IfExpr, MergeExpr, NotExpr, OrIf, PipeLineExpr, RedirectExpr, RedirectType, State,
+    SubShellExpr, VariableLookup, WhileExpr,
 };
 use std::sync::{Arc, Mutex};
 
@@ -101,14 +101,19 @@ impl Parser {
         while self.try_consume(ShTokenType::Pipe) {
             pipeline.push(match self.current.token_type {
                 ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
-                ShTokenType::While => CompoundList::Whileexpr(self.parse_while()?),
+                ShTokenType::While | ShTokenType::Until => {
+                    CompoundList::Whileexpr(self.parse_while()?)
+                }
                 //ShTokenType::Function => self.parse_function()?,
                 _ => CompoundList::Commandexpr(self.parse_command()?),
             });
         }
 
+        let mut file_redirect = None;
         self.skip_whitespace();
-        let file_redirect = self.parse_redirect()?;
+        if !self.current_is(ShTokenType::EndOfFile) && !self.current_is(ShTokenType::NewLine) {
+            file_redirect = self.parse_redirect()?;
+        }
         let background = self.parse_control();
 
         Ok(PipeLineExpr {
@@ -237,6 +242,7 @@ impl Parser {
             && self.current.token_type != ShTokenType::OrIf
             && self.current.token_type != ShTokenType::RedirectOut
             && self.current.token_type != ShTokenType::AppendOut
+            && self.current.token_type != ShTokenType::RedirectIn
             && self.current.token_type != ShTokenType::Control
         {
             self.next_token();
@@ -369,31 +375,38 @@ impl Parser {
 
     fn parse_redirect(&mut self) -> Result<Option<RedirectExpr>, String> {
         self.skip_whitespace();
-        let append = if self.try_consume(ShTokenType::RedirectOut) {
-            ShTokenType::RedirectOut
+        let mut file_descriptor = 1;
+        let mode = if self.try_consume(ShTokenType::RedirectOut) {
+            RedirectType::Out
         } else if self.try_consume(ShTokenType::AppendOut) {
-            ShTokenType::AppendOut
+            RedirectType::OutAppend
+        } else if self.try_consume(ShTokenType::RedirectIn) {
+            file_descriptor = 0;
+            RedirectType::In
         } else {
-            ShTokenType::EndOfFile
+            if self.current_is(ShTokenType::EndOfFile) {
+                self.rewind(0);
+            } else {
+                self.rewind(1);
+            }
+            return Ok(None);
         };
         self.skip_whitespace();
-        if append != ShTokenType::EndOfFile {
-            let file = match self.parse_argument()? {
-                Some(a) => a,
-                None => {
-                    return Err(format!(
-                        "Syntax error: Expected a file name after '{:?}'",
-                        self.current
-                    ))
-                }
-            };
-            self.next_token();
-            return Ok(Some(RedirectExpr {
-                file,
-                append: append == ShTokenType::AppendOut,
-            }));
-        }
-        Ok(None)
+        let file = match self.parse_argument()? {
+            Some(a) => a,
+            None => {
+                return Err(format!(
+                    "Syntax error: Expected a file name after '{:?}'",
+                    self.current
+                ))
+            }
+        };
+        self.next_token();
+        Ok(Some(RedirectExpr {
+            file,
+            mode,
+            file_descriptor,
+        }))
     }
 
     fn parse_control(&mut self) -> bool {
@@ -453,6 +466,7 @@ impl Parser {
             | ShTokenType::Pipe
             | ShTokenType::RedirectOut
             | ShTokenType::AppendOut
+            | ShTokenType::RedirectIn
             | ShTokenType::Control
             | ShTokenType::RightParen
             | ShTokenType::LeftParen
@@ -543,6 +557,12 @@ impl Parser {
                 token, self.current.lexeme
             ))
         }
+    }
+
+    fn rewind(&mut self, n: usize) {
+        let loc = if self.loc - n > 0 { self.loc - n } else { 0 };
+        self.loc = loc;
+        self.current = self.token[self.loc].clone();
     }
 
     fn next_token(&mut self) {
@@ -1455,7 +1475,8 @@ mod test {
             capture_out: None,
             file_redirect: Some(RedirectExpr {
                 file: expr::Argument::Name("/tmp/file".to_string()),
-                append: false,
+                mode: expr::RedirectType::Out,
+                file_descriptor: 1,
             }),
             background: false,
             state: expr::State::new(),
@@ -1484,7 +1505,8 @@ mod test {
             capture_out: None,
             file_redirect: Some(RedirectExpr {
                 file: expr::Argument::Name("/tmp/file".to_string()),
-                append: true,
+                mode: expr::RedirectType::OutAppend,
+                file_descriptor: 1,
             }),
             background: false,
             state: expr::State::new(),
