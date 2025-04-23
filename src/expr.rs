@@ -267,7 +267,7 @@ impl PipeLineExpr {
                         return change_dir::ChangeDir::new(&exp.arguments[0].eval(&self.state))
                             .eval();
                     } else if base_command == "jobs" {
-                        let opt = exp.arguments.get(0).and_then(|arg| match arg {
+                        let opt = exp.arguments.first().and_then(|arg| match arg {
                             Argument::Name(arg) => Some(arg.as_str()),
                             _ => None,
                         });
@@ -544,7 +544,7 @@ fn handle_jobs_cmd(opt: Option<&str>, state: &Arc<Mutex<State>>) {
                 for part in &job.cmd.parts {
                     print!(" {part}");
                 }
-                print!("\n");
+                println!();
             }
         }
         Some("-p") => {
