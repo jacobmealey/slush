@@ -2,14 +2,15 @@ pub mod change_dir;
 use crate::parser::Parser;
 use shared_child::SharedChild;
 use std::cell::RefCell;
-use std::env;
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::process;
-use std::process::Command;
 use std::process::Stdio;
+use std::process::{Command, ExitStatus};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use std::{env, io};
 
 #[derive(Debug)]
 pub struct State {
@@ -271,6 +272,7 @@ impl PipeLineExpr {
                             _ => None,
                         });
                         handle_jobs_cmd(opt, &self.state);
+                        return 0;
                     } else if base_command == "true" {
                         return 0;
                     } else if base_command == "false" {
@@ -538,7 +540,7 @@ fn handle_jobs_cmd(opt: Option<&str>, state: &Arc<Mutex<State>>) {
             let state = state.lock().expect("unable to acquire lock");
             for (job_num, job) in state.bg_jobs.iter().enumerate() {
                 // Todo: display <current>.
-                print!("[{}] Running", job_num + 1);
+                print!("[{}] {}", job_num + 1, job.status());
                 for part in &job.cmd.parts {
                     print!(" {part}");
                 }
@@ -561,8 +563,35 @@ fn handle_jobs_cmd(opt: Option<&str>, state: &Arc<Mutex<State>>) {
 }
 
 #[derive(Debug)]
+enum Status {
+    Running,
+    Done(ExitStatus),
+    Unknown(io::Error),
+}
+
+impl Display for Status {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Status::Running => write!(f, "Running"),
+            Status::Done(code) => write!(f, "Done({code})"),
+            Status::Unknown(e) => write!(f, "Unknown({e})"),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Job {
     pub child: Arc<SharedChild>,
     pub cmd: CommandStr,
     pub pid: u32,
+}
+
+impl Job {
+    fn status(&self) -> Status {
+        match self.child.try_wait() {
+            Ok(Some(status)) => Status::Done(status),
+            Ok(None) => Status::Running,
+            Err(e) => Status::Unknown(e),
+        }
+    }
 }
