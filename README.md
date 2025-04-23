@@ -41,7 +41,7 @@
 - [ ] Background process control
   - [x] Moving jobs to the background
   - [ ] bringing jobs to the foreground
-  - [ ] listing available jobs
+  - [x] listing available jobs
 - [ ] essential built-ins
   - [ ] [list of posix built ins at the bottom](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap01.html)
   - [x] cd

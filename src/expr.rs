@@ -2,19 +2,20 @@ pub mod change_dir;
 use crate::parser::Parser;
 use shared_child::SharedChild;
 use std::cell::RefCell;
-use std::env;
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::process;
-use std::process::Command;
 use std::process::Stdio;
+use std::process::{Command, ExitStatus};
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use std::{env, io};
 
 #[derive(Debug)]
 pub struct State {
-    pub fg_jobs: Vec<Arc<SharedChild>>,
-    pub bg_jobs: Vec<Arc<SharedChild>>,
+    pub fg_jobs: Vec<Job>,
+    pub bg_jobs: Vec<Job>,
     pub prev_status: i32,
 }
 
@@ -266,11 +267,26 @@ impl AssignmentExpr {
 }
 
 impl CommandExpr {
-    pub fn build_command(&self, state: &Arc<Mutex<State>>) -> Box<process::Command> {
+    pub fn build_command_str(&self, state: &Arc<Mutex<State>>) -> CommandStr {
         let com = self.command.eval(state);
-        let mut cmd = Box::new(Command::new(&com));
+        let mut parts = vec![com];
         for arg in &self.arguments {
-            cmd.arg(arg.eval(state));
+            parts.push(arg.eval(state));
+        }
+        CommandStr { parts }
+    }
+}
+
+#[derive(Debug)]
+pub struct CommandStr {
+    parts: Vec<String>,
+}
+
+impl CommandStr {
+    pub fn build_command(&self) -> Box<Command> {
+        let mut cmd = Box::new(Command::new(&self.parts[0]));
+        for arg in &self.parts[1..] {
+            cmd.arg(arg);
         }
         cmd
     }
@@ -300,6 +316,13 @@ impl PipeLineExpr {
                     if base_command == "cd" {
                         return change_dir::ChangeDir::new(&exp.arguments[0].eval(&self.state))
                             .eval();
+                    } else if base_command == "jobs" {
+                        let opt = exp.arguments.first().and_then(|arg| match arg {
+                            Argument::Name(arg) => Some(arg.as_str()),
+                            _ => None,
+                        });
+                        handle_jobs_cmd(opt, &self.state);
+                        return 0;
                     } else if base_command == "true" {
                         return 0;
                     } else if base_command == "false" {
@@ -334,7 +357,8 @@ impl PipeLineExpr {
                         return 0;
                     }
 
-                    let mut cmd = exp.build_command(&self.state.clone());
+                    let cmd_str = exp.build_command_str(&self.state.clone());
+                    let mut cmd = cmd_str.build_command();
 
                     let mut state = self.state.lock().expect("unable to acquire lock");
 
@@ -372,10 +396,18 @@ impl PipeLineExpr {
                             return 2;
                         }
                     });
+
+                    let child = prev_child.as_ref().unwrap().clone();
+                    let job = Job {
+                        pid: child.id(),
+                        child,
+                        cmd: cmd_str,
+                    };
+
                     if self.background {
-                        state.bg_jobs.push(prev_child.as_ref().unwrap().clone());
+                        state.bg_jobs.push(job);
                     } else {
-                        state.fg_jobs.push(prev_child.as_ref().unwrap().clone());
+                        state.fg_jobs.push(job);
                     }
                     0
                 }
@@ -610,4 +642,66 @@ pub struct Output {
     status: Option<i32>,
     stdout: Vec<u8>,
     _stderr: Vec<u8>,
+}
+
+fn handle_jobs_cmd(opt: Option<&str>, state: &Arc<Mutex<State>>) {
+    match opt {
+        None => {
+            let state = state.lock().expect("unable to acquire lock");
+            for (job_num, job) in state.bg_jobs.iter().enumerate() {
+                // Todo: display <current>.
+                print!("[{}] {}", job_num + 1, job.status());
+                for part in &job.cmd.parts {
+                    print!(" {part}");
+                }
+                println!();
+            }
+        }
+        Some("-p") => {
+            let state = state.lock().expect("unable to acquire lock");
+            for job in state.bg_jobs.iter() {
+                println!("{}", job.pid);
+            }
+        }
+        Some("-l") => {
+            println!("The option `-l` is not supported at the moment");
+        }
+        Some(opt) => {
+            println!("invalid option `{opt}`");
+        }
+    }
+}
+
+#[derive(Debug)]
+enum Status {
+    Running,
+    Done(ExitStatus),
+    Unknown(io::Error),
+}
+
+impl Display for Status {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Status::Running => write!(f, "Running"),
+            Status::Done(code) => write!(f, "Done({code})"),
+            Status::Unknown(e) => write!(f, "Unknown({e})"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Job {
+    pub child: Arc<SharedChild>,
+    pub cmd: CommandStr,
+    pub pid: u32,
+}
+
+impl Job {
+    fn status(&self) -> Status {
+        match self.child.try_wait() {
+            Ok(Some(status)) => Status::Done(status),
+            Ok(None) => Status::Running,
+            Err(e) => Status::Unknown(e),
+        }
+    }
 }

@@ -51,8 +51,8 @@ fn repl() {
         let s = state.clone();
         let handler_state = state.clone();
         ctrlc::set_handler(move || {
-            for child in &mut handler_state.lock().expect("Could not unlock jobs").fg_jobs {
-                child.kill().unwrap();
+            for job in &mut handler_state.lock().expect("Could not unlock jobs").fg_jobs {
+                job.child.kill().unwrap();
             }
             println!();
             handler_state
@@ -65,7 +65,8 @@ fn repl() {
         loop {
             if *PRUNE_JOBS.lock().unwrap() {
                 let mut jobs = state.lock().unwrap();
-                jobs.fg_jobs.retain(|job| job.try_wait().unwrap().is_some());
+                jobs.fg_jobs
+                    .retain(|job| job.child.try_wait().unwrap().is_some());
                 *PRUNE_JOBS.lock().unwrap() = false;
             }
             print!("[{}] $ ", state.lock().unwrap().prev_status);
