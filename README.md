@@ -2,6 +2,10 @@
 
 [![Build](https://github.com/jacobmealey/slush/actions/workflows/rust.yml/badge.svg)](https://github.com/jacobmealey/slush/actions/workflows/rust.yml)
 
+## Slush goals & objectives
+Slush is not planned to be a useful interactive shell, but instead a lightweight POSIX-compliant shell inspired by Dash. Below
+is a list of objectives for the near term. The to-do list is always growing as I learn more about what goes into a POSIX shell. 
+
 ## Todo
 - [x] Subshell
   - [x] Backtick subshell
@@ -16,7 +20,8 @@
 - [x] Basic single quote strings
 - [ ] Double quote strings with substitutions
 - [x] [File redirects](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_07)
-- [ ] Redirect input with `<`
+- [x] Redirect input with `<`
+- [ ] Explicit file descriptor redirects
 - [ ] [String Splitting](https://www.shellcheck.net/wiki/SC2086)
 - [ ] Globbing
 - [ ] Environment handling
