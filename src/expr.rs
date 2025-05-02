@@ -138,9 +138,30 @@ impl WhileExpr {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct ForExpr {
+    pub name: String,
+    pub list: Vec<Argument>,
+    pub commands: Vec<PipeLineExpr>,
+}
+
+impl ForExpr {
+    pub fn eval(&mut self, state: &Arc<Mutex<State>>) -> i32 {
+        let mut ret = 0;
+        for arg in &self.list {
+            env::set_var(&self.name, arg.eval(state));
+            for command in &mut self.commands {
+                ret = command.eval();
+            }
+        }
+        ret
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct NotExpr {
     pub condition: AndOrNode,
 }
+
 impl NotExpr {
     pub fn eval(&mut self) -> i32 {
         if self.condition.eval() == 0 {
@@ -155,6 +176,7 @@ impl NotExpr {
 pub enum CompoundList {
     Ifexpr(IfExpr),
     Whileexpr(WhileExpr),
+    Forexpr(ForExpr),
     Commandexpr(CommandExpr),
 }
 
@@ -300,6 +322,7 @@ impl PipeLineExpr {
             match expr {
                 CompoundList::Ifexpr(ifxpr) => ifxpr.eval(),
                 CompoundList::Whileexpr(whlexpr) => whlexpr.eval(),
+                CompoundList::Forexpr(forexpr) => forexpr.eval(&self.state.clone()),
                 CompoundList::Commandexpr(exp) => {
                     if let Some(ref mut ass) = exp.assignment {
                         ass.eval(&self.state.clone());

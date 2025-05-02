@@ -1,7 +1,7 @@
 pub mod tokenizer;
 use crate::expr::{
-    AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, ExpansionExpr, IfBranch,
-    IfExpr, MergeExpr, NotExpr, OrIf, PipeLineExpr, RedirectExpr, RedirectType, State,
+    AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, ExpansionExpr, ForExpr,
+    IfBranch, IfExpr, MergeExpr, NotExpr, OrIf, PipeLineExpr, RedirectExpr, RedirectType, State,
     SubShellExpr, VariableLookup, WhileExpr,
 };
 use std::sync::{Arc, Mutex};
@@ -95,6 +95,7 @@ impl Parser {
         pipeline.push(match self.current.token_type {
             ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
             ShTokenType::While | ShTokenType::Until => CompoundList::Whileexpr(self.parse_while()?),
+            ShTokenType::For => CompoundList::Forexpr(self.parse_for()?),
             //ShTokenType::Function => self.parse_function()?,
             _ => CompoundList::Commandexpr(self.parse_command()?),
         });
@@ -104,6 +105,7 @@ impl Parser {
                 ShTokenType::While | ShTokenType::Until => {
                     CompoundList::Whileexpr(self.parse_while()?)
                 }
+                ShTokenType::For => CompoundList::Forexpr(self.parse_for()?),
                 //ShTokenType::Function => self.parse_function()?,
                 _ => CompoundList::Commandexpr(self.parse_command()?),
             });
@@ -169,6 +171,57 @@ impl Parser {
             condition,
             if_branch,
             else_branch,
+        })
+    }
+
+    fn parse_for(&mut self) -> Result<ForExpr, String> {
+        self.consume(ShTokenType::For)?;
+        self.skip_whitespace();
+        if !self.current_is(ShTokenType::Name) {
+            return Err(format!(
+                "Expected some name after 'for' instead found {}",
+                self.current.lexeme
+            ));
+        }
+        let name = self.current.lexeme.clone();
+        self.next_token();
+        self.skip_whitespace();
+        let list: Vec<Argument> = if self.try_consume(ShTokenType::In) {
+            let mut vec: Vec<Argument> = Vec::new();
+            while !(self.current_is(ShTokenType::SemiColon)
+                || self.current_is(ShTokenType::NewLine)
+                || self.current_is(ShTokenType::Do))
+            {
+                self.skip_whitespace();
+                vec.push(match self.parse_argument()? {
+                    Some(a) => a,
+                    None => {
+                        return Err(format!(
+                            "Expected some argument instead found {}",
+                            self.current.lexeme
+                        ));
+                    }
+                });
+                self.next_token();
+            }
+            self.try_consume(ShTokenType::SemiColon);
+            self.skip_whitespace_newlines();
+            self.consume(ShTokenType::Do)?;
+            vec
+        } else {
+            Vec::new()
+        };
+
+        let mut commands: Vec<PipeLineExpr> = Vec::new();
+        while !self.try_consume(ShTokenType::Done) {
+            commands.push(self.parse_pipeline()?);
+            self.next_token();
+        }
+
+        Ok(ForExpr {
+            name,
+            list,
+            commands,
         })
     }
 
