@@ -202,7 +202,6 @@ impl Parser {
                         ));
                     }
                 });
-                self.next_token();
             }
             self.try_consume(ShTokenType::SemiColon);
             self.skip_whitespace_newlines();
@@ -287,37 +286,11 @@ impl Parser {
             arguments: Vec::new(),
             assignment,
         };
-        while self.current.token_type != ShTokenType::EndOfFile
-            && self.current.token_type != ShTokenType::NewLine
-            && self.current.token_type != ShTokenType::Pipe
-            && self.current.token_type != ShTokenType::SemiColon
-            && self.current.token_type != ShTokenType::AndIf
-            && self.current.token_type != ShTokenType::OrIf
-            && self.current.token_type != ShTokenType::RedirectOut
-            && self.current.token_type != ShTokenType::AppendOut
-            && self.current.token_type != ShTokenType::RedirectIn
-            && self.current.token_type != ShTokenType::Control
-        {
-            self.next_token();
-            // how do generalize this?
-            match self.parse_argument()? {
-                Some(a) => {
-                    if !command.arguments.is_empty()
-                        && self.prev.token_type != ShTokenType::WhiteSpace
-                    {
-                        let l = command.arguments.pop().unwrap();
-                        command.arguments.push(Argument::Merge(MergeExpr {
-                            left: Box::new(l),
-                            right: Box::new(a),
-                        }));
-                    } else {
-                        command.arguments.push(a)
-                    }
-                }
-                None => {
-                    continue;
-                } // ignore all tokens until a delimiting token
-            };
+
+        self.skip_whitespace();
+        while let Some(argument) = self.parse_argument()? {
+            command.arguments.push(argument);
+            self.skip_whitespace();
         }
         self.try_consume(ShTokenType::SemiColon);
         Ok(command)
@@ -345,32 +318,7 @@ impl Parser {
                 self.current = self.token[self.loc].clone();
                 return Ok(None);
             }
-            while !self.current_is(ShTokenType::WhiteSpace)
-                && !self.current_is(ShTokenType::NewLine)
-                && !self.current_is(ShTokenType::SemiColon)
-            {
-                // an assignment can be a string, an @VAR or a direct token
-                match self.parse_argument()? {
-                    Some(a) => {
-                        // while we still have tokens in the assignment we need
-                        // to construct it at run time by creating MergeExprss
-                        // of the various types of arguments strung together.
-                        if val.is_some() {
-                            let l = val.take().unwrap();
-                            val = Some(Argument::Merge(MergeExpr {
-                                left: Box::new(l),
-                                right: Box::new(a),
-                            }));
-                        } else {
-                            val = Some(a);
-                        }
-                    }
-                    None => {
-                        break;
-                    } // ignore all tokens until a delimiting token
-                };
-                self.next_token();
-            }
+            val = self.parse_argument()?;
         }
         if let Some(argtype) = val {
             return Ok(Some(AssignmentExpr { key, val: argtype }));
@@ -454,7 +402,6 @@ impl Parser {
                 ))
             }
         };
-        self.next_token();
         Ok(Some(RedirectExpr {
             file,
             mode,
@@ -474,13 +421,32 @@ impl Parser {
     //   $ ls $TEMP_DIR
     //   Made public so the tokenizer can use it?
     pub fn parse_argument(&mut self) -> Result<Option<Argument>, String> {
+        let mut argument: Option<Argument> = None;
+        while let Some(a) = self._parse_argument()? {
+            // while we still have tokens in the assignment we need
+            // to construct it at run time by creating MergeExprss
+            // of the various types of arguments strung together.
+            if argument.is_some() {
+                let l = argument.take().unwrap();
+                argument = Some(Argument::Merge(MergeExpr {
+                    left: Box::new(l),
+                    right: Box::new(a),
+                }));
+            } else {
+                argument = Some(a);
+            }
+        }
+        Ok(argument)
+    }
+
+    fn _parse_argument(&mut self) -> Result<Option<Argument>, String> {
         match self.current.token_type {
-            ShTokenType::Name => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
+            ShTokenType::Name => Ok(Some(Argument::Name(self.consume_current().lexeme.clone()))),
             ShTokenType::DollarSign => {
-                self.next_token();
+                self.consume(ShTokenType::DollarSign)?;
                 match self.current.token_type {
                     ShTokenType::Name => Ok(Some(Argument::Variable(VariableLookup {
-                        name: self.current.lexeme.clone(),
+                        name: self.consume_current().lexeme.clone(),
                     }))),
                     ShTokenType::LeftParen => Ok(Some(Argument::SubShell(SubShellExpr {
                         shell: self
@@ -494,7 +460,7 @@ impl Parser {
             }
 
             ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
-                shell: self.current.lexeme.clone(),
+                shell: self.consume_current().lexeme.clone(),
             }))),
             // This is wildly ugly -- someone make this better!
             // We must do this in order to detect 'if' or 'else' as arguments and
@@ -509,7 +475,7 @@ impl Parser {
             | ShTokenType::Function
             | ShTokenType::Case
             | ShTokenType::Esac
-            | ShTokenType::Then => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
+            | ShTokenType::Then => Ok(Some(Argument::Name(self.consume_current().lexeme.clone()))),
             ShTokenType::WhiteSpace
             | ShTokenType::NewLine
             | ShTokenType::SemiColon
@@ -524,7 +490,7 @@ impl Parser {
             | ShTokenType::RightParen
             | ShTokenType::LeftParen
             | ShTokenType::EndOfFile => Ok(None),
-            _ => Ok(Some(Argument::Name(self.current.lexeme.clone()))),
+            _ => Ok(Some(Argument::Name(self.consume_current().lexeme.clone()))),
         }
     }
 
@@ -540,7 +506,7 @@ impl Parser {
         }
     }
 
-    // For braces and parents assumes you have already ingested left
+    // For braces and parens assumes you have already ingested left
     fn collect_matching(
         &mut self,
         left: ShTokenType,
@@ -548,7 +514,8 @@ impl Parser {
     ) -> Result<String, String> {
         let mut count = 1;
         let mut ret: String = String::new();
-        while count > 0 && !self.current_is(right) {
+        while count > 0 {
+            // && !self.current_is(right) {
             self.next_token();
             if self.current_is(ShTokenType::EndOfFile) {
                 return Err(format!(
@@ -567,6 +534,7 @@ impl Parser {
                 ret.push_str(&self.current.lexeme)
             }
         }
+        self.next_token();
         Ok(ret)
     }
 
@@ -616,6 +584,11 @@ impl Parser {
         let loc = if self.loc - n > 0 { self.loc - n } else { 0 };
         self.loc = loc;
         self.current = self.token[self.loc].clone();
+    }
+
+    fn consume_current(&mut self) -> Token {
+        self.next_token();
+        self.prev.clone()
     }
 
     fn next_token(&mut self) {
@@ -820,7 +793,7 @@ mod test {
     }
 
     #[test]
-    fn tes_ls_and_pwd() {
+    fn test_ls_and_pwd() {
         let line = "ls && pwd";
         let state = expr::State::new();
         let mut parser = Parser::new(state);
