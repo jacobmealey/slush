@@ -7,4 +7,4 @@ for t in test_scripts/*; do
     fi
 done
 
-echo "All tests passed succesfully"
+echo "All tests passed successfully"

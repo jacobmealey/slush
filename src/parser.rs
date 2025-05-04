@@ -96,7 +96,6 @@ impl Parser {
             ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
             ShTokenType::While | ShTokenType::Until => CompoundList::Whileexpr(self.parse_while()?),
             ShTokenType::For => CompoundList::Forexpr(self.parse_for()?),
-            //ShTokenType::Function => self.parse_function()?,
             _ => CompoundList::Commandexpr(self.parse_command()?),
         });
         while self.try_consume(ShTokenType::Pipe) {
@@ -106,7 +105,6 @@ impl Parser {
                     CompoundList::Whileexpr(self.parse_while()?)
                 }
                 ShTokenType::For => CompoundList::Forexpr(self.parse_for()?),
-                //ShTokenType::Function => self.parse_function()?,
                 _ => CompoundList::Commandexpr(self.parse_command()?),
             });
         }
@@ -254,10 +252,6 @@ impl Parser {
 
         Ok(WhileExpr { condition, body })
     }
-
-    // fn parse_function(&mut self) -> Result<FunctionExpr, String> {
-
-    // }
 
     fn parse_command(&mut self) -> Result<CommandExpr, String> {
         let assignment = self.parse_assignment()?;
@@ -439,6 +433,8 @@ impl Parser {
         Ok(argument)
     }
 
+    // helper function for parse_argument that gets exactly one 'primitive' argument
+    // which may be strung together to create
     fn _parse_argument(&mut self) -> Result<Option<Argument>, String> {
         match self.current.token_type {
             ShTokenType::Name => Ok(Some(Argument::Name(self.consume_current().lexeme.clone()))),
@@ -462,20 +458,6 @@ impl Parser {
             ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
                 shell: self.consume_current().lexeme.clone(),
             }))),
-            // This is wildly ugly -- someone make this better!
-            // We must do this in order to detect 'if' or 'else' as arguments and
-            // translate the individual lexeme to a named argument
-            ShTokenType::Fi
-            | ShTokenType::Else
-            | ShTokenType::Elif
-            | ShTokenType::If
-            | ShTokenType::Do
-            | ShTokenType::For
-            | ShTokenType::While
-            | ShTokenType::Function
-            | ShTokenType::Case
-            | ShTokenType::Esac
-            | ShTokenType::Then => Ok(Some(Argument::Name(self.consume_current().lexeme.clone()))),
             ShTokenType::WhiteSpace
             | ShTokenType::NewLine
             | ShTokenType::SemiColon
@@ -515,7 +497,6 @@ impl Parser {
         let mut count = 1;
         let mut ret: String = String::new();
         while count > 0 {
-            // && !self.current_is(right) {
             self.next_token();
             if self.current_is(ShTokenType::EndOfFile) {
                 return Err(format!(

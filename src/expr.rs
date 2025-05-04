@@ -94,8 +94,6 @@ pub struct IfExpr {
     pub condition: PipeLineExpr,
     pub if_branch: Vec<PipeLineExpr>,
     pub else_branch: Option<IfBranch>,
-    //pub elif_branch: Option<Box<IfExpr>>,
-    //pub else_branch: Option<Vec<PipeLineExpr>>,
 }
 
 impl IfExpr {
@@ -601,14 +599,6 @@ impl Argument {
         }
     }
 }
-
-// #[derive(Debug)]
-// pub enum Expr {
-//     //CommandExpr(CommandExpr),
-//     PipeLineExpr(PipeLineExpr),
-//     AssignmentExpr(AssignmentExpr),
-//     //SubShellExpr(SubShellExpr)
-// }
 
 fn get_variable(var: String, state: &Arc<Mutex<State>>) -> String {
     match var.as_str() {
