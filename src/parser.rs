@@ -521,7 +521,7 @@ impl Parser {
 
     fn collect_until(&mut self, stop: ShTokenType) -> Result<String, String> {
         let mut ret: String = String::new();
-        while !self.current_is(stop) {
+        while !self.try_consume(stop) {
             if self.current_is(ShTokenType::EndOfFile) {
                 return Err(format!(
                     "Syntax Error: Unexpected end of file, no matching '{:?}'",
