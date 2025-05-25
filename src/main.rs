@@ -22,7 +22,8 @@ fn repl() {
 
     panic::set_hook(Box::new(|panic_info| {
         println!("one or more internal error occurred while running slush.");
-        println!("Panic Info: {}", panic_info);
+        println!("{}", panic_info);
+        println!("Submit an issue (or a pull request!) here: https://github.com/jacobmealey/slush");
     }));
 
     unsafe {

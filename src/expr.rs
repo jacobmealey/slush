@@ -603,8 +603,18 @@ impl Argument {
 fn get_variable(var: String, state: &Arc<Mutex<State>>) -> String {
     match var.as_str() {
         "0" => String::from("slush"),
-        "!" => process::id().to_string(),
+        "!" => {
+            if let Some(job) = state.lock().unwrap().bg_jobs.last() {
+                job.child.id().to_string()
+            } else {
+                String::from("0")
+            }
+        }
         "?" => state.lock().unwrap().prev_status.to_string(),
+        "$" => process::id().to_string(),
+        "*" | "#" | "-" => {
+            panic!("'{var}' parameters are not yet supported")
+        }
         _ => env::var(var).unwrap_or_default(),
     }
 }

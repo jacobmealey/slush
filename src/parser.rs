@@ -451,6 +451,11 @@ impl Parser {
                     ShTokenType::LeftBrace => {
                         Ok(Some(Argument::Expansion(self.parse_expansion()?)))
                     }
+                    ShTokenType::DollarSign | ShTokenType::Bang | ShTokenType::Star => {
+                        Ok(Some(Argument::Variable(VariableLookup {
+                            name: self.consume_current().lexeme.clone(),
+                        })))
+                    }
                     _ => Err("Expected some value after '$'".to_string()),
                 }
             }
