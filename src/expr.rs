@@ -404,17 +404,15 @@ impl PipeLineExpr {
                         Ok(c) => match SharedChild::new(c) {
                             Ok(sc) => Arc::new(sc),
                             Err(v) => {
-                                println!(
+                                panic!(
                                     "Error creating shared child {}: {}",
                                     exp.command.eval(&self.state),
                                     v
                                 );
-                                return 2;
                             }
                         },
                         Err(v) => {
-                            println!("Error spawning {}: {}", exp.command.eval(&self.state), v);
-                            return 2;
+                            panic!("Error spawning {}: {}", exp.command.eval(&self.state), v);
                         }
                     });
 
@@ -446,7 +444,6 @@ impl PipeLineExpr {
                 }
                 exit_status = outie.status.expect("Couldn't get exit code from prev job");
             } else {
-                println!("Spawning command in the background!");
                 exit_status = 0;
             }
         } else if self.file_redirect.is_some() {
@@ -471,17 +468,14 @@ impl PipeLineExpr {
                     Err(_) => return 1,
                 }
             } else {
-                println!("Unexpected for redirect! Error Error!");
-                return 1;
+                panic!("Unexpected for redirect! Error Error!");
             };
             if *mode == RedirectType::In {
-                println!("is this happening?");
                 let mut buffer: Box<[u8]> = Box::new([0; 4096]);
                 let mut stdin = match prev_child.clone().unwrap().take_stdin() {
                     Some(s) => s,
                     None => {
-                        println!("couldn't acquire stdin of process...");
-                        return 1;
+                        panic!("couldn't acquire stdin of process...");
                     }
                 };
 
@@ -497,7 +491,7 @@ impl PipeLineExpr {
                         break;
                     }
                     if let Err(e) = stdin.write(&buffer[..n]) {
-                        println!("Error writing to stdin: {}", e);
+                        panic!("Error writing to stdin: {}", e);
                     }
                 }
                 drop(stdin);
