@@ -2,7 +2,9 @@ pub mod change_dir;
 use crate::parser::Parser;
 use shared_child::SharedChild;
 use std::cell::RefCell;
-use std::fmt::{Display, Formatter};
+use std::collections::HashMap;
+use std::fmt;
+use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::process;
@@ -17,6 +19,7 @@ pub struct State {
     pub fg_jobs: Vec<Job>,
     pub bg_jobs: Vec<Job>,
     pub prev_status: i32,
+    pub built_ins: HashMap<String, BuiltIn>,
 }
 
 impl State {
@@ -25,6 +28,99 @@ impl State {
             bg_jobs: Vec::new(),
             fg_jobs: Vec::new(),
             prev_status: 0,
+            built_ins: HashMap::from([
+                (
+                    "cd".to_string(),
+                    BuiltIn {
+                        name: "cd".to_string(),
+                        command: Box::new(
+                            |args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
+                                change_dir::ChangeDir::new(&args[0].eval(&state)).eval()
+                            },
+                        ),
+                    },
+                ),
+                (
+                    "jobs".to_string(),
+                    BuiltIn {
+                        name: "jobs".to_string(),
+                        command: Box::new(
+                            |args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
+                                let opt = args.first().and_then(|arg| match arg {
+                                    Argument::Name(arg) => Some(arg.as_str()),
+                                    _ => None,
+                                });
+                                handle_jobs_cmd(opt, &state);
+                                0
+                            },
+                        ),
+                    },
+                ),
+                (
+                    "true".to_string(),
+                    BuiltIn {
+                        name: "true".to_string(),
+                        command: Box::new(|_: &Vec<Argument>, _: Arc<Mutex<State>>| -> i32 { 0 }),
+                    },
+                ),
+                (
+                    "false".to_string(),
+                    BuiltIn {
+                        name: "true".to_string(),
+                        command: Box::new(|_: &Vec<Argument>, _: Arc<Mutex<State>>| -> i32 { 1 }),
+                    },
+                ),
+                (
+                    "astview".to_string(),
+                    BuiltIn {
+                        name: "astview".to_string(),
+                        command: Box::new(
+                            |args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
+                                let mut parser = Parser::new(state.clone());
+                                parser.parse(&args[0].eval(&state));
+                                println!("{:#?}", parser.exprs);
+                                0
+                            },
+                        ),
+                    },
+                ),
+                (
+                    "help".to_string(),
+                    BuiltIn {
+                        name: "help".to_string(),
+                        command: Box::new(|_: &Vec<Argument>, _: Arc<Mutex<State>>| -> i32 {
+                            println!("slush: A shell you can drink!");
+                            println!("\nBuiltins:");
+                            println!("  cd <dir> - change directory");
+                            println!("  exit [code] - exit the shell, optionally with a code");
+                            println!(
+                            "  astview '<command>' - view the abstract syntax tree of a command"
+                        );
+                            println!("  true - return 0");
+                            println!("  false - return 1");
+                            println!("  help - print this message");
+                            0
+                        }),
+                    },
+                ),
+                (
+                    "exit".to_string(),
+                    BuiltIn {
+                        name: "exit".to_string(),
+                        command: Box::new(
+                            |args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
+                                if !args.is_empty() {
+                                    std::process::exit(
+                                        args[0].eval(&state).parse().unwrap_or_default(),
+                                    );
+                                } else {
+                                    std::process::exit(0);
+                                }
+                            },
+                        ),
+                    },
+                ),
+            ]),
         }))
     }
 }
@@ -312,10 +408,33 @@ impl CommandStr {
     }
 }
 
+type BuiltInEval = Box<dyn Fn(&Vec<Argument>, Arc<Mutex<State>>) -> i32>;
+pub struct BuiltIn {
+    name: String,
+    command: BuiltInEval,
+    // stream: ?? what will this be?
+}
+
+impl Debug for BuiltIn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BuiltIn").field("name", &self.name).finish()
+    }
+}
+
+// how do we do this w/ out unsafe?
+unsafe impl Send for BuiltIn {}
+unsafe impl Sync for BuiltIn {}
+
+#[derive(Debug)]
+enum SlushJob {
+    Builtin(i32),
+    Child(Arc<SharedChild>),
+}
+
 impl PipeLineExpr {
-    fn eval(&mut self) -> i32 {
+    fn assemble_pipeline(&mut self) -> Vec<SlushJob> {
+        let mut jobs: Vec<SlushJob> = Vec::new();
         let sz = self.pipeline.len();
-        let mut prev_child: Option<Arc<SharedChild>> = None;
         for (i, expr) in self.pipeline.iter_mut().enumerate() {
             match expr {
                 CompoundList::Ifexpr(ifxpr) => ifxpr.eval(),
@@ -333,49 +452,21 @@ impl PipeLineExpr {
                     }
 
                     let base_command = exp.command.eval(&self.state.clone());
-                    // should built ins be there own special node on the tree?
-                    if base_command == "cd" {
-                        return change_dir::ChangeDir::new(&exp.arguments[0].eval(&self.state))
-                            .eval();
-                    } else if base_command == "jobs" {
-                        let opt = exp.arguments.first().and_then(|arg| match arg {
-                            Argument::Name(arg) => Some(arg.as_str()),
-                            _ => None,
-                        });
-                        handle_jobs_cmd(opt, &self.state);
-                        return 0;
-                    } else if base_command == "true" {
-                        return 0;
-                    } else if base_command == "false" {
-                        return 1;
-                    } else if base_command == "astview" {
-                        let mut parser = Parser::new(self.state.clone());
-                        parser.parse(&exp.arguments[0].eval(&self.state));
-                        println!("{:#?}", parser.exprs);
-                        return 0;
-                    } else if base_command == "exit" {
-                        if !exp.arguments.is_empty() {
-                            std::process::exit(
-                                exp.arguments[0]
-                                    .eval(&self.state)
-                                    .parse()
-                                    .unwrap_or_default(),
-                            );
-                        } else {
-                            std::process::exit(0);
-                        }
-                    } else if base_command == "help" {
-                        println!("slush: A shell you can drink!");
-                        println!("\nBuiltins:");
-                        println!("  cd <dir> - change directory");
-                        println!("  exit [code] - exit the shell, optionally with a code");
-                        println!(
-                            "  astview '<command>' - view the abstract syntax tree of a command"
-                        );
-                        println!("  true - return 0");
-                        println!("  false - return 1");
-                        println!("  help - print this message");
-                        return 0;
+
+                    if let Some(command) = self
+                        .state
+                        .clone()
+                        .lock()
+                        .unwrap()
+                        .built_ins
+                        .get(&base_command)
+                    {
+                        jobs.push(SlushJob::Builtin((command.command)(
+                            &exp.arguments,
+                            self.state.clone(),
+                        )));
+                        //jobs.push(SlushJob::Builtin(command));
+                        continue;
                     }
 
                     let cmd_str = exp.build_command_str(&self.state.clone());
@@ -383,9 +474,17 @@ impl PipeLineExpr {
 
                     let mut state = self.state.lock().expect("unable to acquire lock");
 
-                    if let Some(pchild) = prev_child {
-                        cmd.stdin(pchild.take_stdout().unwrap());
-                    }
+                    if let Some(job) = jobs.last_mut() {
+                        match job {
+                            SlushJob::Builtin(_) => None,
+                            SlushJob::Child(pchild) => {
+                                {
+                                    cmd.stdin(pchild.take_stdout().unwrap());
+                                }
+                                Some(())
+                            }
+                        };
+                    };
                     if let Some(file_redirect) = &self.file_redirect {
                         if file_redirect.mode == RedirectType::In {
                             cmd.stdin(Stdio::piped());
@@ -400,9 +499,9 @@ impl PipeLineExpr {
                         cmd.stdout(Stdio::piped());
                     }
 
-                    prev_child = Some(match cmd.spawn() {
+                    jobs.push(match cmd.spawn() {
                         Ok(c) => match SharedChild::new(c) {
-                            Ok(sc) => Arc::new(sc),
+                            Ok(sc) => SlushJob::Child(Arc::new(sc)),
                             Err(v) => {
                                 panic!(
                                     "Error creating shared child {}: {}",
@@ -416,21 +515,31 @@ impl PipeLineExpr {
                         }
                     });
 
-                    let child = prev_child.as_ref().unwrap().clone();
-                    let job = Job {
-                        pid: child.id(),
-                        child,
-                        cmd: cmd_str,
-                    };
+                    if let SlushJob::Child(child) = jobs.last_mut().as_ref().unwrap() {
+                        let job = Job {
+                            pid: child.id(),
+                            child: child.clone(),
+                            cmd: cmd_str,
+                        };
 
-                    if self.background {
-                        state.bg_jobs.push(job);
-                    } else {
-                        state.fg_jobs.push(job);
+                        if self.background {
+                            state.bg_jobs.push(job);
+                        } else {
+                            state.fg_jobs.push(job);
+                        }
                     }
                     0
                 }
             };
+        }
+        jobs
+    }
+    fn eval(&mut self) -> i32 {
+        let jobs = self.assemble_pipeline();
+
+        let mut prev_child: Option<Arc<SharedChild>> = None;
+        if let Some(SlushJob::Child(child)) = jobs.last() {
+            prev_child = Some(child.clone());
         }
         let mut exit_status: i32 = 0;
         if let Some(rcstr) = &self.capture_out {
@@ -501,12 +610,19 @@ impl PipeLineExpr {
                 let outie = wait_with_output(&prev_child.unwrap());
                 let _ = file.write_all(&outie.stdout.clone());
             }
-        } else if prev_child.is_some() {
-            if !self.background {
-                let status = prev_child.unwrap().wait().unwrap();
-                exit_status = status.code().unwrap_or(130);
-            } else {
-                exit_status = 0;
+        } else if let Some(job) = jobs.last() {
+            match job {
+                SlushJob::Child(child) => {
+                    if !self.background {
+                        let status = child.wait().unwrap();
+                        exit_status = status.code().unwrap_or(130);
+                    } else {
+                        exit_status = 0;
+                    }
+                }
+                SlushJob::Builtin(status) => {
+                    exit_status = *status;
+                }
             }
         }
 
