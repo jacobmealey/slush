@@ -33,62 +33,56 @@ impl State {
                     "cd".to_string(),
                     BuiltIn {
                         name: "cd".to_string(),
-                        command: Box::new(
-                            |args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
-                                change_dir::ChangeDir::new(&args[0].eval(&state)).eval()
-                            },
-                        ),
+                        command: Rc::new(|args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
+                            change_dir::ChangeDir::new(&args[0].eval(&state)).eval()
+                        }),
                     },
                 ),
                 (
                     "jobs".to_string(),
                     BuiltIn {
                         name: "jobs".to_string(),
-                        command: Box::new(
-                            |args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
-                                let opt = args.first().and_then(|arg| match arg {
-                                    Argument::Name(arg) => Some(arg.as_str()),
-                                    _ => None,
-                                });
-                                handle_jobs_cmd(opt, &state);
-                                0
-                            },
-                        ),
+                        command: Rc::new(|args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
+                            let opt = args.first().and_then(|arg| match arg {
+                                Argument::Name(arg) => Some(arg.as_str()),
+                                _ => None,
+                            });
+                            handle_jobs_cmd(opt, &state);
+                            0
+                        }),
                     },
                 ),
                 (
                     "true".to_string(),
                     BuiltIn {
                         name: "true".to_string(),
-                        command: Box::new(|_: &Vec<Argument>, _: Arc<Mutex<State>>| -> i32 { 0 }),
+                        command: Rc::new(|_: &Vec<Argument>, _: Arc<Mutex<State>>| -> i32 { 0 }),
                     },
                 ),
                 (
                     "false".to_string(),
                     BuiltIn {
                         name: "true".to_string(),
-                        command: Box::new(|_: &Vec<Argument>, _: Arc<Mutex<State>>| -> i32 { 1 }),
+                        command: Rc::new(|_: &Vec<Argument>, _: Arc<Mutex<State>>| -> i32 { 1 }),
                     },
                 ),
                 (
                     "astview".to_string(),
                     BuiltIn {
                         name: "astview".to_string(),
-                        command: Box::new(
-                            |args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
-                                let mut parser = Parser::new(state.clone());
-                                parser.parse(&args[0].eval(&state));
-                                println!("{:#?}", parser.exprs);
-                                0
-                            },
-                        ),
+                        command: Rc::new(|args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
+                            let mut parser = Parser::new(state.clone());
+                            parser.parse(&args[0].eval(&state));
+                            println!("{:#?}", parser.exprs);
+                            0
+                        }),
                     },
                 ),
                 (
                     "help".to_string(),
                     BuiltIn {
                         name: "help".to_string(),
-                        command: Box::new(|_: &Vec<Argument>, _: Arc<Mutex<State>>| -> i32 {
+                        command: Rc::new(|_: &Vec<Argument>, _: Arc<Mutex<State>>| -> i32 {
                             println!("slush: A shell you can drink!");
                             println!("\nBuiltins:");
                             println!("  cd <dir> - change directory");
@@ -107,17 +101,15 @@ impl State {
                     "exit".to_string(),
                     BuiltIn {
                         name: "exit".to_string(),
-                        command: Box::new(
-                            |args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
-                                if !args.is_empty() {
-                                    std::process::exit(
-                                        args[0].eval(&state).parse().unwrap_or_default(),
-                                    );
-                                } else {
-                                    std::process::exit(0);
-                                }
-                            },
-                        ),
+                        command: Rc::new(|args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
+                            if !args.is_empty() {
+                                std::process::exit(
+                                    args[0].eval(&state).parse().unwrap_or_default(),
+                                );
+                            } else {
+                                std::process::exit(0);
+                            }
+                        }),
                     },
                 ),
             ]),
@@ -156,7 +148,7 @@ pub struct RedirectExpr {
 #[derive(Debug, PartialEq)]
 pub struct CommandExpr {
     pub command: Argument,
-    pub arguments: Vec<Argument>,
+    pub arguments: Rc<Vec<Argument>>,
     pub assignment: Option<AssignmentExpr>,
 }
 
@@ -386,7 +378,7 @@ impl CommandExpr {
     pub fn build_command_str(&self, state: &Arc<Mutex<State>>) -> CommandStr {
         let com = self.command.eval(state);
         let mut parts = vec![com];
-        for arg in &self.arguments {
+        for arg in &*self.arguments {
             parts.push(arg.eval(state));
         }
         CommandStr { parts }
@@ -408,11 +400,20 @@ impl CommandStr {
     }
 }
 
-type BuiltInEval = Box<dyn Fn(&Vec<Argument>, Arc<Mutex<State>>) -> i32>;
+type BuiltInEval = Rc<dyn Fn(&Vec<Argument>, Arc<Mutex<State>>) -> i32>;
 pub struct BuiltIn {
     name: String,
     command: BuiltInEval,
     // stream: ?? what will this be?
+}
+
+impl Clone for BuiltIn {
+    fn clone(&self) -> BuiltIn {
+        BuiltIn {
+            name: self.name.clone(),
+            command: self.command.clone(),
+        }
+    }
 }
 
 impl Debug for BuiltIn {
@@ -427,7 +428,7 @@ unsafe impl Sync for BuiltIn {}
 
 #[derive(Debug)]
 enum SlushJob {
-    Builtin(i32),
+    Builtin(BuiltIn, Rc<Vec<Argument>>),
     Child(Arc<SharedChild>),
 }
 
@@ -461,11 +462,7 @@ impl PipeLineExpr {
                         .built_ins
                         .get(&base_command)
                     {
-                        jobs.push(SlushJob::Builtin((command.command)(
-                            &exp.arguments,
-                            self.state.clone(),
-                        )));
-                        //jobs.push(SlushJob::Builtin(command));
+                        jobs.push(SlushJob::Builtin(command.clone(), exp.arguments.clone()));
                         continue;
                     }
 
@@ -476,7 +473,7 @@ impl PipeLineExpr {
 
                     if let Some(job) = jobs.last_mut() {
                         match job {
-                            SlushJob::Builtin(_) => None,
+                            SlushJob::Builtin(_, _) => None,
                             SlushJob::Child(pchild) => {
                                 {
                                     cmd.stdin(pchild.take_stdout().unwrap());
@@ -620,8 +617,8 @@ impl PipeLineExpr {
                         exit_status = 0;
                     }
                 }
-                SlushJob::Builtin(status) => {
-                    exit_status = *status;
+                SlushJob::Builtin(builtin, args) => {
+                    exit_status = (builtin.command)(args, self.state.clone());
                 }
             }
         }

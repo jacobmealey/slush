@@ -4,6 +4,7 @@ use crate::expr::{
     IfBranch, IfExpr, MergeExpr, NotExpr, OrIf, PipeLineExpr, RedirectExpr, RedirectType, State,
     SubShellExpr, VariableLookup, WhileExpr,
 };
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
 use crate::tokenizer::{tokens, ShTokenType, Token};
@@ -271,19 +272,19 @@ impl Parser {
         if !err.is_empty() && assignment.is_some() {
             return Ok(CommandExpr {
                 command: command_name,
-                arguments: Vec::new(),
+                arguments: Rc::new(Vec::new()),
                 assignment,
             });
         }
         let mut command = CommandExpr {
             command: command_name,
-            arguments: Vec::new(),
+            arguments: Rc::new(Vec::new()),
             assignment,
         };
 
         self.skip_whitespace();
         while let Some(argument) = self.parse_argument()? {
-            command.arguments.push(argument);
+            Rc::get_mut(&mut command.arguments).unwrap().push(argument);
             self.skip_whitespace();
         }
         self.try_consume(ShTokenType::SemiColon);
@@ -616,7 +617,8 @@ mod test {
                 arguments: Vec::from([
                     Argument::Name("/var".to_string()),
                     Argument::Name("/tmp".to_string()),
-                ]),
+                ])
+                .into(),
                 assignment: None,
             })]),
             capture_out: None,
@@ -639,7 +641,7 @@ mod test {
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("ls".to_string()),
-                arguments: Vec::new(),
+                arguments: Vec::new().into(),
                 assignment: None,
             })]),
             capture_out: None,
@@ -662,12 +664,12 @@ mod test {
             pipeline: Vec::from([
                 CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("ls".to_string()),
-                    arguments: Vec::new(),
+                    arguments: Vec::new().into(),
                     assignment: None,
                 }),
                 CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("wc".to_string()),
-                    arguments: Vec::new(),
+                    arguments: Vec::new().into(),
                     assignment: None,
                 }),
             ]),
@@ -717,7 +719,8 @@ mod test {
                 command: Argument::Name("echo".to_string()),
                 arguments: Vec::from([Argument::SubShell(SubShellExpr {
                     shell: "which ls".to_string(),
-                })]),
+                })])
+                .into(),
                 assignment: None,
             })]),
             capture_out: None,
@@ -751,7 +754,7 @@ mod test {
             AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("echo".to_string()),
-                    arguments: Vec::from([Argument::Name("hello world".to_string())]),
+                    arguments: Vec::from([Argument::Name("hello world".to_string())]).into(),
                     assignment: None,
                 })]),
                 capture_out: None,
@@ -762,7 +765,7 @@ mod test {
             AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("echo".to_string()),
-                    arguments: Vec::from([Argument::Name("goodbye world".to_string())]),
+                    arguments: Vec::from([Argument::Name("goodbye world".to_string())]).into(),
                     assignment: None,
                 })]),
                 capture_out: None,
@@ -787,7 +790,7 @@ mod test {
             left: AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("ls".to_string()),
-                    arguments: Vec::new(),
+                    arguments: Vec::new().into(),
                     assignment: None,
                 })]),
                 capture_out: None,
@@ -798,7 +801,7 @@ mod test {
             right: AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("pwd".to_string()),
-                    arguments: Vec::new(),
+                    arguments: Vec::new().into(),
                     assignment: None,
                 })]),
                 capture_out: None,
@@ -824,7 +827,8 @@ mod test {
                 command: Argument::Name("echo".to_string()),
                 arguments: Vec::from([Argument::SubShell(SubShellExpr {
                     shell: "echo $(echo hello world)".to_string(),
-                })]),
+                })])
+                .into(),
                 assignment: None,
             })]),
             capture_out: None,
@@ -850,7 +854,7 @@ mod test {
                 condition: PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("true".to_string()),
-                        arguments: Vec::new(),
+                        arguments: Vec::new().into(),
                         assignment: None,
                     })]),
                     capture_out: None,
@@ -861,7 +865,7 @@ mod test {
                 if_branch: Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("echo".to_string()),
-                        arguments: Vec::from([Argument::Name("hello world".to_string())]),
+                        arguments: Vec::from([Argument::Name("hello world".to_string())]).into(),
                         assignment: None,
                     })]),
                     capture_out: None,
@@ -896,7 +900,8 @@ mod test {
                     right: Box::new(Argument::SubShell(SubShellExpr {
                         shell: "world".to_string(),
                     })),
-                })]),
+                })])
+                .into(),
                 assignment: None,
             })]),
             capture_out: None,
@@ -924,7 +929,8 @@ mod test {
                     right: Box::new(Argument::Variable(VariableLookup {
                         name: "PWD".to_string(),
                     })),
-                })]),
+                })])
+                .into(),
                 assignment: None,
             })]),
             capture_out: None,
@@ -952,7 +958,8 @@ mod test {
                         shell: "pwd".to_string(),
                     })),
                     right: Box::new(Argument::Name("file".to_string())),
-                })]),
+                })])
+                .into(),
                 assignment: None,
             })]),
             capture_out: None,
@@ -997,7 +1004,7 @@ mod test {
                 condition: PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("true".to_string()),
-                        arguments: Vec::new(),
+                        arguments: Vec::new().into(),
                         assignment: None,
                     })]),
                     capture_out: None,
@@ -1008,7 +1015,7 @@ mod test {
                 if_branch: Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("echo".to_string()),
-                        arguments: Vec::from([Argument::Name("hello world".to_string())]),
+                        arguments: Vec::from([Argument::Name("hello world".to_string())]).into(),
                         assignment: None,
                     })]),
                     capture_out: None,
@@ -1019,7 +1026,7 @@ mod test {
                 else_branch: Some(IfBranch::Else(Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("echo".to_string()),
-                        arguments: Vec::from([Argument::Name("goodbye world".to_string())]),
+                        arguments: Vec::from([Argument::Name("goodbye world".to_string())]).into(),
                         assignment: None,
                     })]),
                     capture_out: None,
@@ -1053,7 +1060,8 @@ mod test {
                 arguments: Vec::from([
                     Argument::Name("if".to_string()),
                     Argument::Name("else".to_string()),
-                ]),
+                ])
+                .into(),
                 assignment: None,
             })]),
             capture_out: None,
@@ -1080,7 +1088,7 @@ mod test {
                 condition: PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("true".to_string()),
-                        arguments: Vec::new(),
+                        arguments: Vec::new().into(),
                         assignment: None,
                     })]),
                     capture_out: None,
@@ -1091,7 +1099,7 @@ mod test {
                 if_branch: Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("exit".to_string()),
-                        arguments: Vec::from([Argument::Name("1".to_string())]),
+                        arguments: Vec::from([Argument::Name("1".to_string())]).into(),
                         assignment: None,
                     })]),
                     capture_out: None,
@@ -1103,7 +1111,7 @@ mod test {
                     condition: PipeLineExpr {
                         pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                             command: Argument::Name("false".to_string()),
-                            arguments: Vec::new(),
+                            arguments: Vec::new().into(),
                             assignment: None,
                         })]),
                         capture_out: None,
@@ -1114,7 +1122,7 @@ mod test {
                     if_branch: Vec::from([PipeLineExpr {
                         pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                             command: Argument::Name("exit".to_string()),
-                            arguments: Vec::from([Argument::Name("2".to_string())]),
+                            arguments: Vec::from([Argument::Name("2".to_string())]).into(),
                             assignment: None,
                         })]),
                         capture_out: None,
@@ -1125,7 +1133,7 @@ mod test {
                     else_branch: Some(IfBranch::Else(Vec::from([PipeLineExpr {
                         pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                             command: Argument::Name("exit".to_string()),
-                            arguments: Vec::from([Argument::Name("3".to_string())]),
+                            arguments: Vec::from([Argument::Name("3".to_string())]).into(),
                             assignment: None,
                         })]),
                         capture_out: None,
@@ -1162,7 +1170,7 @@ mod test {
                 condition: PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("true".to_string()),
-                        arguments: Vec::new(),
+                        arguments: Vec::new().into(),
                         assignment: None,
                     })]),
                     capture_out: None,
@@ -1173,7 +1181,7 @@ mod test {
                 if_branch: Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("exit".to_string()),
-                        arguments: Vec::from([Argument::Name("1".to_string())]),
+                        arguments: Vec::from([Argument::Name("1".to_string())]).into(),
                         assignment: None,
                     })]),
                     capture_out: None,
@@ -1185,7 +1193,7 @@ mod test {
                     condition: PipeLineExpr {
                         pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                             command: Argument::Name("false".to_string()),
-                            arguments: Vec::new(),
+                            arguments: Vec::new().into(),
                             assignment: None,
                         })]),
                         capture_out: None,
@@ -1196,7 +1204,7 @@ mod test {
                     if_branch: Vec::from([PipeLineExpr {
                         pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                             command: Argument::Name("exit".to_string()),
-                            arguments: Vec::from([Argument::Name("2".to_string())]),
+                            arguments: Vec::from([Argument::Name("2".to_string())]).into(),
                             assignment: None,
                         })]),
                         capture_out: None,
@@ -1234,7 +1242,7 @@ mod test {
                 condition: AndOrNode::Pipeline(Box::new(PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("true".to_string()),
-                        arguments: Vec::new(),
+                        arguments: Vec::new().into(),
                         assignment: None,
                     })]),
                     capture_out: None,
@@ -1245,7 +1253,7 @@ mod test {
                 body: Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("echo".to_string()),
-                        arguments: Vec::from([Argument::Name("hello world".to_string())]),
+                        arguments: Vec::from([Argument::Name("hello world".to_string())]).into(),
                         assignment: None,
                     })]),
                     capture_out: None,
@@ -1278,7 +1286,7 @@ mod test {
                 condition: AndOrNode::Pipeline(Box::new(PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("true".to_string()),
-                        arguments: Vec::new(),
+                        arguments: Vec::new().into(),
                         assignment: None,
                     })]),
                     capture_out: None,
@@ -1289,7 +1297,7 @@ mod test {
                 body: Vec::from([PipeLineExpr {
                     pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                         command: Argument::Name("echo".to_string()),
-                        arguments: Vec::from([Argument::Name("hello world".to_string())]),
+                        arguments: Vec::from([Argument::Name("hello world".to_string())]).into(),
                         assignment: None,
                     })]),
                     capture_out: None,
@@ -1321,7 +1329,7 @@ mod test {
             AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("echo".to_string()),
-                    arguments: Vec::from([Argument::Name("hello world".to_string())]),
+                    arguments: Vec::from([Argument::Name("hello world".to_string())]).into(),
                     assignment: None,
                 })]),
                 capture_out: None,
@@ -1332,7 +1340,7 @@ mod test {
             AndOrNode::Pipeline(Box::new(PipeLineExpr {
                 pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                     command: Argument::Name("echo".to_string()),
-                    arguments: Vec::from([Argument::Name("goodbye world".to_string())]),
+                    arguments: Vec::from([Argument::Name("goodbye world".to_string())]).into(),
                     assignment: None,
                 })]),
                 capture_out: None,
@@ -1363,7 +1371,8 @@ mod test {
                 command: Argument::Name("echo".to_string()),
                 arguments: Vec::from([Argument::Expansion(ExpansionExpr::ParameterExpansion(
                     "PWD".to_string(),
-                ))]),
+                ))])
+                .into(),
                 assignment: None,
             })]),
             capture_out: None,
@@ -1394,7 +1403,8 @@ mod test {
                     right: Box::new(Argument::Expansion(ExpansionExpr::ParameterExpansion(
                         "PWD".to_string(),
                     ))),
-                })]),
+                })])
+                .into(),
                 assignment: None,
             })]),
             capture_out: None,
@@ -1426,7 +1436,8 @@ mod test {
                     right: Box::new(Argument::SubShell(SubShellExpr {
                         shell: "pwd".to_string(),
                     })),
-                })]),
+                })])
+                .into(),
                 assignment: None,
             })]),
             capture_out: None,
@@ -1453,7 +1464,8 @@ mod test {
                 command: Argument::Name("echo".to_string()),
                 arguments: Vec::from([Argument::Variable(VariableLookup {
                     name: "X".to_string(),
-                })]),
+                })])
+                .into(),
                 assignment: Some(AssignmentExpr {
                     key: "X".to_string(),
                     val: Argument::Name("1".to_string()),
@@ -1481,7 +1493,7 @@ mod test {
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("ls".to_string()),
-                arguments: Vec::new(),
+                arguments: Vec::new().into(),
                 assignment: None,
             })]),
             capture_out: None,
@@ -1511,7 +1523,7 @@ mod test {
         let golden_set = Vec::from([AndOrNode::Pipeline(Box::new(PipeLineExpr {
             pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("ls".to_string()),
-                arguments: Vec::new(),
+                arguments: Vec::new().into(),
                 assignment: None,
             })]),
             capture_out: None,
