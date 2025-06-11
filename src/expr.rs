@@ -20,6 +20,7 @@ pub struct State {
     pub bg_jobs: Vec<Job>,
     pub prev_status: i32,
     pub built_ins: HashMap<String, BuiltIn>,
+    pub functions: HashMap<String, Vec<PipeLineExpr>>,
 }
 
 impl State {
@@ -28,6 +29,7 @@ impl State {
             bg_jobs: Vec::new(),
             fg_jobs: Vec::new(),
             prev_status: 0,
+            functions: HashMap::new(),
             built_ins: HashMap::from([
                 (
                     "cd".to_string(),
@@ -124,7 +126,24 @@ impl PartialEq for State {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
+pub struct FunctionExpr {
+    pub fname: String,
+    pub commands: Vec<PipeLineExpr>,
+}
+
+impl FunctionExpr {
+    pub fn eval(&mut self, state: &Arc<Mutex<State>>) -> i32 {
+        state
+            .lock()
+            .unwrap()
+            .functions
+            .insert(self.fname.clone(), Vec::from(self.commands.clone()));
+        0
+    }
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct VariableLookup {
     pub name: String,
 }
@@ -136,7 +155,7 @@ pub enum RedirectType {
     In,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct RedirectExpr {
     pub file: Argument,
     pub mode: RedirectType,
@@ -145,14 +164,14 @@ pub struct RedirectExpr {
 
 // How do we made these outputs streams? it would be nice to have it feed
 // between two child CommandExprs as they are creating them...
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct CommandExpr {
     pub command: Argument,
     pub arguments: Rc<Vec<Argument>>,
     pub assignment: Option<AssignmentExpr>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PipeLineExpr {
     pub pipeline: Vec<CompoundList>,
     pub capture_out: Option<Rc<RefCell<String>>>,
@@ -170,14 +189,14 @@ impl PartialEq for PipeLineExpr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum IfBranch {
     Elif(Box<IfExpr>),
     Else(Vec<PipeLineExpr>),
 }
 
 // instead of making this a tree could i make it a vector?
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct IfExpr {
     pub condition: PipeLineExpr,
     pub if_branch: Vec<PipeLineExpr>,
@@ -206,7 +225,7 @@ impl IfExpr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct WhileExpr {
     pub condition: AndOrNode,
     pub body: Vec<PipeLineExpr>,
@@ -223,7 +242,7 @@ impl WhileExpr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct ForExpr {
     pub name: String,
     pub list: Vec<Argument>,
@@ -243,7 +262,7 @@ impl ForExpr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct NotExpr {
     pub condition: AndOrNode,
 }
@@ -258,15 +277,16 @@ impl NotExpr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum CompoundList {
     Ifexpr(IfExpr),
     Whileexpr(WhileExpr),
     Forexpr(ForExpr),
     Commandexpr(CommandExpr),
+    Functionexpr(FunctionExpr),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum AndOrNode {
     Pipeline(Box<PipeLineExpr>),
     Andif(Box<AndIf>),
@@ -294,7 +314,7 @@ impl AndOrNode {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct OrIf {
     pub left: AndOrNode,
     pub right: AndOrNode,
@@ -315,7 +335,7 @@ impl OrIf {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct AndIf {
     pub left: AndOrNode,
     pub right: AndOrNode,
@@ -338,7 +358,7 @@ impl AndIf {
 }
 
 // pub struct And IF
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct AssignmentExpr {
     pub key: String,
     pub val: Argument,
@@ -346,7 +366,7 @@ pub struct AssignmentExpr {
 
 // Subshell is simply a wrapper around a string which can be fed into a
 // parser, evaluated and stdout returned.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct SubShellExpr {
     pub shell: String,
 }
@@ -385,7 +405,7 @@ impl CommandExpr {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CommandStr {
     parts: Vec<String>,
 }
@@ -400,6 +420,7 @@ impl CommandStr {
     }
 }
 
+#[derive(Clone)]
 type BuiltInEval = Rc<dyn Fn(&Vec<Argument>, Arc<Mutex<State>>) -> i32>;
 pub struct BuiltIn {
     name: String,
@@ -426,7 +447,7 @@ impl Debug for BuiltIn {
 unsafe impl Send for BuiltIn {}
 unsafe impl Sync for BuiltIn {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum SlushJob {
     Builtin(BuiltIn, Rc<Vec<Argument>>),
     Child(Arc<SharedChild>),
@@ -441,6 +462,7 @@ impl PipeLineExpr {
                 CompoundList::Ifexpr(ifxpr) => ifxpr.eval(),
                 CompoundList::Whileexpr(whlexpr) => whlexpr.eval(),
                 CompoundList::Forexpr(forexpr) => forexpr.eval(&self.state.clone()),
+                CompoundList::Functionexpr(func) => func.eval(&self.state.clone()),
                 CompoundList::Commandexpr(exp) => {
                     if let Some(ref mut ass) = exp.assignment {
                         ass.eval(&self.state.clone());
@@ -633,7 +655,7 @@ impl PipeLineExpr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct MergeExpr {
     pub left: Box<Argument>,
     pub right: Box<Argument>,
@@ -645,7 +667,7 @@ impl MergeExpr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ExpansionExpr {
     ParameterExpansion(String), // the same as Argument::Variable
     StringLengthExpansion(String),
@@ -686,7 +708,7 @@ impl ExpansionExpr {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Argument {
     Name(String),
     Variable(VariableLookup),
@@ -768,6 +790,7 @@ fn wait_with_output(child: &SharedChild) -> Output {
     }
 }
 
+#[derive(Clone)]
 pub struct Output {
     status: Option<i32>,
     stdout: Vec<u8>,
@@ -819,7 +842,7 @@ impl Display for Status {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Job {
     pub child: Arc<SharedChild>,
     pub cmd: CommandStr,

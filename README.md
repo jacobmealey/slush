@@ -39,7 +39,7 @@ is a list of objectives for the near term. The to-do list is always growing as I
   - [x] else
   - [x] while
   - [x] until
-  - [ ] for
+  - [x] for
 - [x] Lists
   - [x] And-if (`||`)
   - [x] Or-if (`&&`)

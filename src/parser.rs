@@ -1,8 +1,8 @@
 pub mod tokenizer;
 use crate::expr::{
     AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, ExpansionExpr, ForExpr,
-    IfBranch, IfExpr, MergeExpr, NotExpr, OrIf, PipeLineExpr, RedirectExpr, RedirectType, State,
-    SubShellExpr, VariableLookup, WhileExpr,
+    FunctionExpr, IfBranch, IfExpr, MergeExpr, NotExpr, OrIf, PipeLineExpr, RedirectExpr,
+    RedirectType, State, SubShellExpr, VariableLookup, WhileExpr,
 };
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -171,6 +171,21 @@ impl Parser {
             if_branch,
             else_branch,
         })
+    }
+
+    fn parse_function(&mut self) -> Result<FunctionExpr, String> {
+        let fname = self.current.lexeme.clone(); // do we need to check this is an actual symbol?
+        self.consume(ShTokenType::LeftParen)?;
+        self.consume(ShTokenType::RightParen)?;
+        self.skip_whitespace_newlines();
+        self.consume(ShTokenType::LeftBrace)?;
+        self.skip_whitespace_newlines();
+        let mut commands: Vec<PipeLineExpr> = Vec::new();
+        while self.try_consume(ShTokenType::RightBrace) {
+            commands.push(self.parse_pipeline()?);
+        }
+
+        Ok(FunctionExpr { fname, commands })
     }
 
     fn parse_for(&mut self) -> Result<ForExpr, String> {
