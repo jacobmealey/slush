@@ -50,19 +50,20 @@ fn repl() {
     } else {
         println!("Hello, Slush!");
         let s = state.clone();
-        let handler_state = state.clone();
-        ctrlc::set_handler(move || {
-            for job in &mut handler_state.lock().expect("Could not unlock jobs").fg_jobs {
-                job.child.kill().unwrap();
-            }
-            println!();
-            handler_state
-                .lock()
-                .expect("Could not unlock jobs")
-                .fg_jobs
-                .clear();
-        })
-        .expect("Error ignoring control C");
+        //let handler_state = state.clone();
+        // Disabling this until
+        // ctrlc::set_handler(move || {
+        //     for job in &mut handler_state.lock().expect("Could not unlock jobs").fg_jobs {
+        //         job.child.kill().unwrap();
+        //     }
+        //     println!();
+        //     handler_state
+        //         .lock()
+        //         .expect("Could not unlock jobs")
+        //         .fg_jobs
+        //         .clear();
+        // })
+        // .expect("Error ignoring control C");
         loop {
             if *PRUNE_JOBS.lock().unwrap() {
                 let mut jobs = state.lock().unwrap();

@@ -64,7 +64,7 @@ impl Parser {
     // the results are a left-associative no precedence
     // list of and / or expressions.
     fn parse_andor_list(&mut self) -> Result<AndOrNode, String> {
-        self.skip_whitespace();
+        self.skip_whitespace_newlines();
         let mut not = false;
         if self.try_consume(ShTokenType::Bang) {
             not = true;
@@ -83,7 +83,7 @@ impl Parser {
             }
         }
 
-        self.skip_whitespace();
+        self.skip_whitespace_newlines();
         if not {
             left = AndOrNode::Notif(Box::new(NotExpr { condition: left }));
         }
@@ -97,7 +97,13 @@ impl Parser {
             ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
             ShTokenType::While | ShTokenType::Until => CompoundList::Whileexpr(self.parse_while()?),
             ShTokenType::For => CompoundList::Forexpr(self.parse_for()?),
-            _ => CompoundList::Commandexpr(self.parse_command()?),
+            _ => {
+                if let Some(function) = self.parse_function()? {
+                    CompoundList::Functionexpr(function)
+                } else {
+                    CompoundList::Commandexpr(self.parse_command()?)
+                }
+            }
         });
         while self.try_consume(ShTokenType::Pipe) {
             pipeline.push(match self.current.token_type {
@@ -173,19 +179,27 @@ impl Parser {
         })
     }
 
-    fn parse_function(&mut self) -> Result<FunctionExpr, String> {
+    fn parse_function(&mut self) -> Result<Option<FunctionExpr>, String> {
         let fname = self.current.lexeme.clone(); // do we need to check this is an actual symbol?
-        self.consume(ShTokenType::LeftParen)?;
-        self.consume(ShTokenType::RightParen)?;
+        self.next_token();
+        if !self.try_consume(ShTokenType::LeftParen) {
+            self.rewind(1);
+            return Ok(None);
+        }
+        if !self.try_consume(ShTokenType::RightParen) {
+            self.rewind(2);
+            return Ok(None);
+        }
         self.skip_whitespace_newlines();
         self.consume(ShTokenType::LeftBrace)?;
         self.skip_whitespace_newlines();
         let mut commands: Vec<PipeLineExpr> = Vec::new();
-        while self.try_consume(ShTokenType::RightBrace) {
+        while !self.try_consume(ShTokenType::RightBrace) {
             commands.push(self.parse_pipeline()?);
+            self.skip_whitespace_newlines();
         }
 
-        Ok(FunctionExpr { fname, commands })
+        Ok(Some(FunctionExpr { fname, commands }))
     }
 
     fn parse_for(&mut self) -> Result<ForExpr, String> {
@@ -335,6 +349,7 @@ impl Parser {
         } else if current_location < self.token.len() {
             self.loc = current_location;
             self.current = self.token[self.loc].clone();
+            self.prev = self.token[self.loc - 1].clone();
         } else {
             return Err(format!(
                 "Syntax error: Unexpected end of file after {:?}",
@@ -560,7 +575,6 @@ impl Parser {
     }
 
     fn try_consume(&mut self, token: ShTokenType) -> bool {
-        self.skip_whitespace();
         if self.current_is(token) {
             self.next_token();
             true
@@ -583,9 +597,11 @@ impl Parser {
     }
 
     fn rewind(&mut self, n: usize) {
-        let loc = if self.loc - n > 0 { self.loc - n } else { 0 };
+        let loc = self.loc.saturating_sub(n);
         self.loc = loc;
-        self.current = self.token[self.loc].clone();
+        if self.loc < self.token.len() {
+            self.current = self.token[self.loc].clone();
+        }
     }
 
     fn consume_current(&mut self) -> Token {

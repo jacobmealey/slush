@@ -20,11 +20,12 @@ pub struct State {
     pub bg_jobs: Vec<Job>,
     pub prev_status: i32,
     pub built_ins: HashMap<String, BuiltIn>,
-    pub functions: HashMap<String, Vec<PipeLineExpr>>,
+    pub functions: HashMap<String, Rc<RefCell<Vec<PipeLineExpr>>>>,
 }
 
 impl State {
     pub fn new() -> Arc<Mutex<State>> {
+        #[allow(clippy::arc_with_non_send_sync)]
         Arc::new(Mutex::new(State {
             bg_jobs: Vec::new(),
             fg_jobs: Vec::new(),
@@ -134,11 +135,10 @@ pub struct FunctionExpr {
 
 impl FunctionExpr {
     pub fn eval(&mut self, state: &Arc<Mutex<State>>) -> i32 {
-        state
-            .lock()
-            .unwrap()
-            .functions
-            .insert(self.fname.clone(), Vec::from(self.commands.clone()));
+        state.lock().unwrap().functions.insert(
+            self.fname.clone(),
+            Rc::new(RefCell::new(self.commands.clone())),
+        );
         0
     }
 }
@@ -420,7 +420,6 @@ impl CommandStr {
     }
 }
 
-#[derive(Clone)]
 type BuiltInEval = Rc<dyn Fn(&Vec<Argument>, Arc<Mutex<State>>) -> i32>;
 pub struct BuiltIn {
     name: String,
@@ -450,6 +449,7 @@ unsafe impl Sync for BuiltIn {}
 #[derive(Debug, Clone)]
 enum SlushJob {
     Builtin(BuiltIn, Rc<Vec<Argument>>),
+    Function(String, Rc<Vec<Argument>>),
     Child(Arc<SharedChild>),
 }
 
@@ -488,6 +488,18 @@ impl PipeLineExpr {
                         continue;
                     }
 
+                    if self
+                        .state
+                        .clone()
+                        .lock()
+                        .unwrap()
+                        .functions
+                        .contains_key(&base_command)
+                    {
+                        jobs.push(SlushJob::Function(base_command, exp.arguments.clone()));
+                        continue;
+                    }
+
                     let cmd_str = exp.build_command_str(&self.state.clone());
                     let mut cmd = cmd_str.build_command();
 
@@ -495,7 +507,7 @@ impl PipeLineExpr {
 
                     if let Some(job) = jobs.last_mut() {
                         match job {
-                            SlushJob::Builtin(_, _) => None,
+                            SlushJob::Builtin(_, _) | SlushJob::Function(_, _) => None,
                             SlushJob::Child(pchild) => {
                                 {
                                     cmd.stdin(pchild.take_stdout().unwrap());
@@ -641,6 +653,22 @@ impl PipeLineExpr {
                 }
                 SlushJob::Builtin(builtin, args) => {
                     exit_status = (builtin.command)(args, self.state.clone());
+                }
+                SlushJob::Function(function, _args) => {
+                    let pl = self
+                        .state
+                        .lock()
+                        .unwrap()
+                        .functions
+                        .get_mut(function)
+                        .unwrap()
+                        .clone();
+                    {
+                        let mut ppl = pl.borrow_mut();
+                        for pipeline in ppl.iter_mut() {
+                            exit_status = pipeline.eval();
+                        }
+                    }
                 }
             }
         }
