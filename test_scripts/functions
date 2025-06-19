@@ -1,0 +1,9 @@
+#!/bin/sh
+
+
+duck() {
+    echo $poo
+    ls
+}
+
+duck "$fuf"
