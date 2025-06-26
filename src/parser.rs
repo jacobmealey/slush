@@ -1,8 +1,8 @@
 pub mod tokenizer;
 use crate::expr::{
     AndIf, AndOrNode, Argument, AssignmentExpr, CommandExpr, CompoundList, ExpansionExpr, ForExpr,
-    FunctionExpr, IfBranch, IfExpr, MergeExpr, NotExpr, OrIf, PipeLineExpr, RedirectExpr,
-    RedirectType, State, SubShellExpr, VariableLookup, WhileExpr,
+    FunctionExpr, FunctionStack, IfBranch, IfExpr, MergeExpr, NotExpr, OrIf, PipeLineExpr,
+    RedirectExpr, RedirectType, State, SubShellExpr, VariableLookup, WhileExpr,
 };
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -199,7 +199,11 @@ impl Parser {
             self.skip_whitespace_newlines();
         }
 
-        Ok(Some(FunctionExpr { fname, commands }))
+        Ok(Some(FunctionExpr {
+            fname,
+            commands,
+            args: FunctionStack::new(),
+        }))
     }
 
     fn parse_for(&mut self) -> Result<ForExpr, String> {

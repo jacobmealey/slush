@@ -2,8 +2,8 @@
 
 
 duck() {
-    echo $poo
-    ls
+    echo "goose"
 }
 
-duck "$fuf"
+# echo $1 $2
+duck "goose"

@@ -1,8 +1,11 @@
+use crate::expr::Argument;
 use crate::parser::tokenizer;
 use nix::sys::signal;
+use std::cell::RefCell;
 use std::env;
 use std::io::{self, BufRead, Write};
 use std::panic;
+use std::rc::Rc;
 use std::sync::{Arc, LazyLock, Mutex};
 mod expr;
 mod parser;
@@ -36,6 +39,16 @@ fn repl() {
     if let Some(arg) = env::args().nth(1) {
         let code_str = std::fs::read_to_string(arg).expect("Error reading file");
         let s = state.clone();
+        {
+            let passed_args: Vec<String> = env::args().collect();
+            let script_args = &mut s.lock().unwrap().argstack;
+            script_args.push(Rc::new(RefCell::new(
+                passed_args
+                    .into_iter()
+                    .map(Argument::Name)
+                    .collect::<Vec<Argument>>(),
+            )));
+        }
         let mut parser = parser::Parser::new(s.clone());
         parser.parse(&code_str);
         if !parser.err.is_empty() {

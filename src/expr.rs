@@ -14,6 +14,8 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::{env, io};
 
+pub type FunctionStack = Vec<Rc<RefCell<Vec<Argument>>>>; // ??
+
 #[derive(Debug)]
 pub struct State {
     pub fg_jobs: Vec<Job>,
@@ -21,6 +23,7 @@ pub struct State {
     pub prev_status: i32,
     pub built_ins: HashMap<String, BuiltIn>,
     pub functions: HashMap<String, Rc<RefCell<Vec<PipeLineExpr>>>>,
+    pub argstack: FunctionStack,
 }
 
 impl State {
@@ -30,6 +33,7 @@ impl State {
             bg_jobs: Vec::new(),
             fg_jobs: Vec::new(),
             prev_status: 0,
+            argstack: FunctionStack::new(),
             functions: HashMap::new(),
             built_ins: HashMap::from([
                 (
@@ -131,6 +135,7 @@ impl PartialEq for State {
 pub struct FunctionExpr {
     pub fname: String,
     pub commands: Vec<PipeLineExpr>,
+    pub args: FunctionStack,
 }
 
 impl FunctionExpr {
@@ -758,6 +763,7 @@ impl Argument {
 }
 
 fn get_variable(var: String, state: &Arc<Mutex<State>>) -> String {
+    let s = state.clone();
     match var.as_str() {
         "0" => String::from("slush"),
         "!" => {
@@ -772,7 +778,20 @@ fn get_variable(var: String, state: &Arc<Mutex<State>>) -> String {
         "*" | "#" | "-" => {
             panic!("'{var}' parameters are not yet supported")
         }
-        _ => env::var(var).unwrap_or_default(),
+        _ => {
+            if let Ok(number) = var.parse::<usize>() {
+                if let Some(args) = s.lock().unwrap().argstack.last() {
+                    args.borrow_mut()
+                        .get(number)
+                        .unwrap_or(&Argument::Name("".to_string()))
+                        .eval(state)
+                } else {
+                    String::from("")
+                }
+            } else {
+                env::var(var).unwrap_or_default()
+            }
+        }
     }
 }
 
