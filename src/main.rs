@@ -1,7 +1,6 @@
 use crate::expr::Argument;
 use crate::parser::tokenizer;
 use nix::sys::signal;
-use std::cell::RefCell;
 use std::env;
 use std::io::{self, BufRead, Write};
 use std::panic;
@@ -42,12 +41,13 @@ fn repl() {
         {
             let passed_args: Vec<String> = env::args().collect();
             let script_args = &mut s.lock().unwrap().argstack;
-            script_args.push(Rc::new(RefCell::new(
+            script_args.borrow_mut().push(Rc::new(
                 passed_args
                     .into_iter()
+                    .skip(2) // skip the slush exec and name of script.
                     .map(Argument::Name)
                     .collect::<Vec<Argument>>(),
-            )));
+            ));
         }
         let mut parser = parser::Parser::new(s.clone());
         parser.parse(&code_str);

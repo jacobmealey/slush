@@ -4,6 +4,7 @@ use crate::expr::{
     FunctionExpr, FunctionStack, IfBranch, IfExpr, MergeExpr, NotExpr, OrIf, PipeLineExpr,
     RedirectExpr, RedirectType, State, SubShellExpr, VariableLookup, WhileExpr,
 };
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -202,7 +203,7 @@ impl Parser {
         Ok(Some(FunctionExpr {
             fname,
             commands,
-            args: FunctionStack::new(),
+            args: FunctionStack::new(RefCell::new(Vec::new())),
         }))
     }
 

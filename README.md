@@ -59,4 +59,4 @@ is a list of objectives for the near term. The to-do list is always growing as I
   - [ ] Use libc calls directly (no ctrl-c rs crate)
   - [x] jobs in array aren't removed when child ends
 - [x] Path cleaning w/ out clean-path library
-- [ ] Built in functions
+- [x] Built in functions

@@ -14,7 +14,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::{env, io};
 
-pub type FunctionStack = Vec<Rc<RefCell<Vec<Argument>>>>; // ??
+pub type FunctionStack = Rc<RefCell<Vec<Rc<Vec<Argument>>>>>; // ??
 
 #[derive(Debug)]
 pub struct State {
@@ -33,7 +33,7 @@ impl State {
             bg_jobs: Vec::new(),
             fg_jobs: Vec::new(),
             prev_status: 0,
-            argstack: FunctionStack::new(),
+            argstack: FunctionStack::new(RefCell::new(Vec::new())),
             functions: HashMap::new(),
             built_ins: HashMap::from([
                 (
@@ -659,21 +659,29 @@ impl PipeLineExpr {
                 SlushJob::Builtin(builtin, args) => {
                     exit_status = (builtin.command)(args, self.state.clone());
                 }
-                SlushJob::Function(function, _args) => {
-                    let pl = self
+                SlushJob::Function(function, args) => {
+                    let argstack = self.state.lock().expect("AHH").argstack.clone();
+                    let aa = args
+                        .iter()
+                        .map(|a| -> Argument { Argument::Name(a.eval(&self.state)) })
+                        .collect();
+                    argstack.borrow_mut().push(Rc::new(aa));
+                    let mut functions = self
                         .state
                         .lock()
-                        .unwrap()
+                        .expect("Couldn't get lock")
                         .functions
-                        .get_mut(function)
-                        .unwrap()
                         .clone();
+                    let pl = functions.get_mut(function).unwrap().clone();
                     {
                         let mut ppl = pl.borrow_mut();
                         for pipeline in ppl.iter_mut() {
                             exit_status = pipeline.eval();
                         }
                     }
+
+                    let argstack = &mut self.state.lock().expect("AHH").argstack;
+                    argstack.borrow_mut().pop();
                 }
             }
         }
@@ -712,13 +720,16 @@ pub enum ExpansionExpr {
 impl ExpansionExpr {
     fn eval(&self, state: &Arc<Mutex<State>>) -> String {
         match self {
-            ExpansionExpr::ParameterExpansion(var) => get_variable(var.clone(), state),
-            ExpansionExpr::StringLengthExpansion(var) => {
-                get_variable(var.clone(), state).len().to_string()
+            ExpansionExpr::ParameterExpansion(var) => {
+                get_variable(var.clone(), state).unwrap_or_default()
             }
+            ExpansionExpr::StringLengthExpansion(var) => get_variable(var.clone(), state)
+                .unwrap_or_default()
+                .len()
+                .to_string(),
             ExpansionExpr::ParameterSubstitute(var, default) => {
-                if !get_variable(var.clone(), state).to_string().is_empty() {
-                    get_variable(var.clone(), state)
+                if let Some(v) = get_variable(var.clone(), state) {
+                    v
                 } else {
                     default.clone()
                 }
@@ -728,8 +739,8 @@ impl ExpansionExpr {
                 std::process::exit(1);
             }
             ExpansionExpr::ParameterAssign(var, default) => {
-                if !get_variable(var.clone(), state).to_string().is_empty() {
-                    get_variable(var.clone(), state)
+                if let Some(v) = get_variable(var.clone(), state) {
+                    v
                 } else {
                     unsafe {
                         env::set_var(var, default);
@@ -754,7 +765,9 @@ impl Argument {
     fn eval(&self, state: &Arc<Mutex<State>>) -> String {
         match self {
             Argument::Name(n) => n.clone(),
-            Argument::Variable(variable) => get_variable(variable.name.clone(), state),
+            Argument::Variable(variable) => {
+                get_variable(variable.name.clone(), state).unwrap_or_default()
+            }
             Argument::SubShell(ss) => ss.stdout(),
             Argument::Merge(merge) => merge.eval(state),
             Argument::Expansion(expansion) => expansion.eval(state),
@@ -762,34 +775,32 @@ impl Argument {
     }
 }
 
-fn get_variable(var: String, state: &Arc<Mutex<State>>) -> String {
+fn get_variable(var: String, state: &Arc<Mutex<State>>) -> Option<String> {
     let s = state.clone();
     match var.as_str() {
-        "0" => String::from("slush"),
-        "!" => {
-            if let Some(job) = state.lock().unwrap().bg_jobs.last() {
-                job.child.id().to_string()
-            } else {
-                String::from("0")
-            }
-        }
-        "?" => state.lock().unwrap().prev_status.to_string(),
-        "$" => process::id().to_string(),
+        "0" => Some(String::from("slush")),
+        "!" => Some(if let Some(job) = state.lock().unwrap().bg_jobs.last() {
+            job.child.id().to_string()
+        } else {
+            String::from("0")
+        }),
+        "?" => Some(state.lock().unwrap().prev_status.to_string()),
+        "$" => Some(process::id().to_string()),
         "*" | "#" | "-" => {
             panic!("'{var}' parameters are not yet supported")
         }
         _ => {
             if let Ok(number) = var.parse::<usize>() {
-                if let Some(args) = s.lock().unwrap().argstack.last() {
-                    args.borrow_mut()
-                        .get(number)
+                let argstack = s.lock().unwrap().argstack.clone();
+
+                let args = argstack.borrow();
+                args.last().map(|a| {
+                    a.get(number - 1)
                         .unwrap_or(&Argument::Name("".to_string()))
                         .eval(state)
-                } else {
-                    String::from("")
-                }
+                })
             } else {
-                env::var(var).unwrap_or_default()
+                Some(env::var(var).unwrap_or_default())
             }
         }
     }
