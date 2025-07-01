@@ -149,7 +149,7 @@ impl Parser {
             && !self.current_is(ShTokenType::Elif)
         {
             if_branch.push(self.parse_pipeline()?);
-            self.next_token();
+            self.skip_whitespace_newlines();
         }
 
         self.skip_whitespace_newlines();
@@ -163,7 +163,7 @@ impl Parser {
             let mut commands: Vec<PipeLineExpr> = Vec::new();
             while !self.try_consume(ShTokenType::Fi) {
                 commands.push(self.parse_pipeline()?);
-                self.next_token();
+                self.skip_whitespace_newlines();
             }
             else_branch = Some(IfBranch::Else(commands));
         }
@@ -247,7 +247,7 @@ impl Parser {
         let mut commands: Vec<PipeLineExpr> = Vec::new();
         while !self.try_consume(ShTokenType::Done) {
             commands.push(self.parse_pipeline()?);
-            self.next_token();
+            self.skip_whitespace_newlines();
         }
 
         Ok(ForExpr {
@@ -278,7 +278,7 @@ impl Parser {
         while !self.try_consume(ShTokenType::Done) {
             let vv = self.parse_pipeline()?;
             body.push(vv);
-            self.next_token();
+            self.skip_whitespace_newlines();
         }
 
         if not {

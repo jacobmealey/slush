@@ -2,7 +2,11 @@ X='c'
 
 while [ ${X} != 'cccccccc' ]; do
     echo $X
+    while [ ${X} != 'cccc' ]; do
+        X=$X$X
+    done
     X=$X$X
+    echo $X
 done
 
 echo 'trying until'

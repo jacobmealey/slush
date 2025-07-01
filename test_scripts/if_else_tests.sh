@@ -1,12 +1,18 @@
 #!/usr/local/bin/slush
-echo hello world
+# echo hello world
 
-CC=gcc
+# CC=gcc
 
 if true; then
-    echo '===== first if statement ====='
+    if true; then
+        echo "okay"
+    elif false; then
+        echo "not okay"
+    else
+        echo "nope"
+    fi
+    printf "this is a test\n"
 fi
-
 if [ -f afile ]; then
     echo '===== we are in da if statement ====='
     echo 'another statement'
@@ -22,4 +28,3 @@ echo 'hello' \
 
 echo $CC
 echo hello
-

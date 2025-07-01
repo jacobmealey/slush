@@ -2,8 +2,12 @@
 
 
 duck() {
+    quack() {
+        echo "quack quack"
+    }
     echo what
     echo "from duck:" $1
+    quack
 }
 
 score() {
@@ -15,4 +19,5 @@ score() {
 duck "goose"
 duck "goose" "moose"
 score "moose" "mouse"
+quack
 

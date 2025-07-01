@@ -16,7 +16,6 @@ use std::{env, io};
 
 pub type FunctionStack = Rc<RefCell<Vec<Rc<Vec<Argument>>>>>; // ??
 
-#[derive(Debug)]
 pub struct State {
     pub fg_jobs: Vec<Job>,
     pub bg_jobs: Vec<Job>,
@@ -128,6 +127,12 @@ impl State {
 impl PartialEq for State {
     fn eq(&self, _: &Self) -> bool {
         true
+    }
+}
+
+impl Debug for State {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("State").finish()
     }
 }
 
