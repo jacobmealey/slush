@@ -53,7 +53,7 @@ is a list of objectives for the near term. The to-do list is always growing as I
   - [x] exit
   - [x] true/false
   - [ ] alias
-- [x] ctrl-c to kill jobs
+- [x] ctrl-c to kill jobs [BROKEN]
   - [x] fix bug where ctrl-c on a job that modifies TTY state utterly breaks the terminal (for example less)
   - [x] fix bug where ctrl-c kills bg jobs as well
   - [ ] Use libc calls directly (no ctrl-c rs crate)
