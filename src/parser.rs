@@ -180,7 +180,7 @@ impl Parser {
     }
 
     fn parse_function(&mut self) -> Result<Option<FunctionExpr>, String> {
-        let fname = self.current().lexeme.clone(); // do we need to check this is an actual symbol?
+        let fname = self.current; // dont copy function lexeme until we know we have a function
         self.next_token();
         if !self.try_consume(ShTokenType::LeftParen) {
             self.rewind(1);
@@ -200,7 +200,7 @@ impl Parser {
         }
 
         Ok(Some(FunctionExpr {
-            fname,
+            fname: self.token[fname].lexeme.clone(),
             commands,
             args: FunctionStack::new(RefCell::new(Vec::new())),
         }))
@@ -334,10 +334,10 @@ impl Parser {
     // the beginning. There must be a better way to do this?
     fn parse_assignment(&mut self) -> Result<Option<AssignmentExpr>, String> {
         let current_location = self.loc;
-        let mut key: String = String::from("");
+        let mut key: usize = 0;
         let mut val: Option<Argument> = None;
         if self.current_is(ShTokenType::Name) {
-            key = self.current().lexeme.clone();
+            key = self.current;
             self.next_token(); // skip the key
             if !self.try_consume(ShTokenType::Equal) {
                 // if we don't have an equal sign then we need to rewind
@@ -349,7 +349,10 @@ impl Parser {
             val = self.parse_argument()?;
         }
         if let Some(argtype) = val {
-            return Ok(Some(AssignmentExpr { key, val: argtype }));
+            return Ok(Some(AssignmentExpr {
+                key: self.token[key].lexeme.clone(),
+                val: argtype,
+            }));
         } else if current_location < self.token.len() {
             self.loc = current_location;
             self.current = self.loc;
