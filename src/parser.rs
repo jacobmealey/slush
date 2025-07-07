@@ -6,15 +6,20 @@ use crate::expr::{
 };
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use crate::tokenizer::{tokens, ShTokenType, Token};
+
+static ENDOFFILE: LazyLock<Token> = LazyLock::new(|| Token {
+    lexeme: "".to_string(),
+    token_type: ShTokenType::EndOfFile,
+});
 
 pub struct Parser {
     token: Vec<Token>,
     pub exprs: Vec<AndOrNode>,
-    current: Token,
-    prev: Token,
+    current: usize,
+    prev: usize,
     loc: usize,
     pub err: String,
     state: Arc<Mutex<State>>,
@@ -25,14 +30,8 @@ impl Parser {
         Parser {
             token: Vec::new(),
             exprs: Vec::new(),
-            current: Token {
-                lexeme: "".to_string(),
-                token_type: ShTokenType::EndOfFile,
-            },
-            prev: Token {
-                lexeme: "".to_string(),
-                token_type: ShTokenType::EndOfFile,
-            },
+            current: 0,
+            prev: 0,
             loc: 0,
             err: "".to_string(),
             state,
@@ -49,9 +48,9 @@ impl Parser {
             }
         };
         if !self.token.is_empty() {
-            self.current = self.token[0].clone();
+            self.current = 0;
         }
-        while self.current.token_type != ShTokenType::EndOfFile {
+        while !self.current_is(ShTokenType::EndOfFile) {
             match self.parse_andor_list() {
                 Ok(expr) => self.exprs.push(expr),
                 Err(strn) => {
@@ -94,7 +93,7 @@ impl Parser {
     fn parse_pipeline(&mut self) -> Result<PipeLineExpr, String> {
         self.skip_whitespace();
         let mut pipeline: Vec<CompoundList> = Vec::new();
-        pipeline.push(match self.current.token_type {
+        pipeline.push(match self.current().token_type {
             ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
             ShTokenType::While | ShTokenType::Until => CompoundList::Whileexpr(self.parse_while()?),
             ShTokenType::For => CompoundList::Forexpr(self.parse_for()?),
@@ -107,7 +106,7 @@ impl Parser {
             }
         });
         while self.try_consume(ShTokenType::Pipe) {
-            pipeline.push(match self.current.token_type {
+            pipeline.push(match self.current().token_type {
                 ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
                 ShTokenType::While | ShTokenType::Until => {
                     CompoundList::Whileexpr(self.parse_while()?)
@@ -181,7 +180,7 @@ impl Parser {
     }
 
     fn parse_function(&mut self) -> Result<Option<FunctionExpr>, String> {
-        let fname = self.current.lexeme.clone(); // do we need to check this is an actual symbol?
+        let fname = self.current().lexeme.clone(); // do we need to check this is an actual symbol?
         self.next_token();
         if !self.try_consume(ShTokenType::LeftParen) {
             self.rewind(1);
@@ -213,10 +212,10 @@ impl Parser {
         if !self.current_is(ShTokenType::Name) {
             return Err(format!(
                 "Expected some name after 'for' instead found {}",
-                self.current.lexeme
+                self.current().lexeme
             ));
         }
-        let name = self.current.lexeme.clone();
+        let name = self.current().lexeme.clone();
         self.next_token();
         self.skip_whitespace();
         let list: Vec<Argument> = if self.try_consume(ShTokenType::In) {
@@ -231,7 +230,7 @@ impl Parser {
                     None => {
                         return Err(format!(
                             "Expected some argument instead found {}",
-                            self.current.lexeme
+                            self.current().lexeme
                         ));
                     }
                 });
@@ -338,13 +337,13 @@ impl Parser {
         let mut key: String = String::from("");
         let mut val: Option<Argument> = None;
         if self.current_is(ShTokenType::Name) {
-            key = self.current.lexeme.clone();
+            key = self.current().lexeme.clone();
             self.next_token(); // skip the key
             if !self.try_consume(ShTokenType::Equal) {
                 // if we don't have an equal sign then we need to rewind
                 // the token stream to the beginning of the assignment
                 self.loc = current_location;
-                self.current = self.token[self.loc].clone();
+                self.current = self.loc;
                 return Ok(None);
             }
             val = self.parse_argument()?;
@@ -353,12 +352,12 @@ impl Parser {
             return Ok(Some(AssignmentExpr { key, val: argtype }));
         } else if current_location < self.token.len() {
             self.loc = current_location;
-            self.current = self.token[self.loc].clone();
-            self.prev = self.token[self.loc - 1].clone();
+            self.current = self.loc;
+            self.prev = self.loc - 1;
         } else {
             return Err(format!(
                 "Syntax error: Unexpected end of file after {:?}",
-                self.prev.lexeme
+                self.prev().lexeme
             ));
         }
         Ok(None)
@@ -373,11 +372,11 @@ impl Parser {
             }
 
             return Ok(ExpansionExpr::StringLengthExpansion(
-                self.current.lexeme.clone(),
+                self.current().lexeme.clone(),
             ));
         } else if self.current_is(ShTokenType::Name) {
             // we are doing some type expansion thiny
-            let name = self.current.lexeme.clone();
+            let name = self.current().lexeme.clone();
             self.next_token();
             if self.current_is(ShTokenType::UseDefault) {
                 self.next_token();
@@ -472,11 +471,11 @@ impl Parser {
     // helper function for parse_argument that gets exactly one 'primitive' argument
     // which may be strung together to create
     fn _parse_argument(&mut self) -> Result<Option<Argument>, String> {
-        match self.current.token_type {
+        match self.current().token_type {
             ShTokenType::Name => Ok(Some(Argument::Name(self.consume_current().lexeme.clone()))),
             ShTokenType::DollarSign => {
                 self.consume(ShTokenType::DollarSign)?;
-                match self.current.token_type {
+                match self.current().token_type {
                     ShTokenType::Name => Ok(Some(Argument::Variable(VariableLookup {
                         name: self.consume_current().lexeme.clone(),
                     }))),
@@ -553,7 +552,7 @@ impl Parser {
                 0
             };
             if count > 0 {
-                ret.push_str(&self.current.lexeme)
+                ret.push_str(&self.current().lexeme)
             }
         }
         self.next_token();
@@ -569,14 +568,14 @@ impl Parser {
                     stop
                 ));
             }
-            ret.push_str(&self.current.lexeme);
+            ret.push_str(&self.current().lexeme);
             self.next_token();
         }
         Ok(ret)
     }
 
     fn current_is(&self, check: ShTokenType) -> bool {
-        self.current.token_type == check
+        self.current().token_type == check
     }
 
     fn try_consume(&mut self, token: ShTokenType) -> bool {
@@ -596,7 +595,8 @@ impl Parser {
         } else {
             Err(format!(
                 "Syntax error: Expected a token {:?}, but found {:?}",
-                token, self.current.lexeme
+                token,
+                self.current().lexeme
             ))
         }
     }
@@ -605,13 +605,13 @@ impl Parser {
         let loc = self.loc.saturating_sub(n);
         self.loc = loc;
         if self.loc < self.token.len() {
-            self.current = self.token[self.loc].clone();
+            self.current = self.loc;
         }
     }
 
-    fn consume_current(&mut self) -> Token {
+    fn consume_current(&mut self) -> &Token {
         self.next_token();
-        self.prev.clone()
+        self.prev()
     }
 
     fn next_token(&mut self) {
@@ -620,17 +620,30 @@ impl Parser {
         self.loc += 1;
         if self.loc >= self.token.len() {
             if self.loc > 0 && self.loc - 1 < self.token.len() {
-                self.prev = self.token[self.loc - 1].clone();
+                self.prev = self.loc - 1;
             }
-            self.current = Token {
-                lexeme: "".to_string(),
-                token_type: ShTokenType::EndOfFile,
-            };
+            self.current = self.token.len();
         } else {
-            self.current = self.token[self.loc].clone();
+            self.current = self.loc;
             if self.loc > 0 {
-                self.prev = self.token[self.loc - 1].clone();
+                self.prev = self.loc - 1;
             }
+        }
+    }
+
+    fn current(&self) -> &Token {
+        if self.current < self.token.len() {
+            &self.token[self.current]
+        } else {
+            &ENDOFFILE
+        }
+    }
+
+    fn prev(&self) -> &Token {
+        if self.prev < self.token.len() {
+            &self.token[self.prev]
+        } else {
+            &ENDOFFILE
         }
     }
 }
