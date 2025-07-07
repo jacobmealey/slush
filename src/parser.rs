@@ -18,8 +18,6 @@ static ENDOFFILE: LazyLock<Token> = LazyLock::new(|| Token {
 pub struct Parser {
     token: Vec<Token>,
     pub exprs: Vec<AndOrNode>,
-    current: usize,
-    prev: usize,
     loc: usize,
     pub err: String,
     state: Arc<Mutex<State>>,
@@ -30,8 +28,6 @@ impl Parser {
         Parser {
             token: Vec::new(),
             exprs: Vec::new(),
-            current: 0,
-            prev: 0,
             loc: 0,
             err: "".to_string(),
             state,
@@ -47,9 +43,7 @@ impl Parser {
                 Vec::new()
             }
         };
-        if !self.token.is_empty() {
-            self.current = 0;
-        }
+
         while !self.current_is(ShTokenType::EndOfFile) {
             match self.parse_andor_list() {
                 Ok(expr) => self.exprs.push(expr),
@@ -180,7 +174,7 @@ impl Parser {
     }
 
     fn parse_function(&mut self) -> Result<Option<FunctionExpr>, String> {
-        let fname = self.current; // dont copy function lexeme until we know we have a function
+        let fname = self.loc; // dont copy function lexeme until we know we have a function
         self.next_token();
         if !self.try_consume(ShTokenType::LeftParen) {
             self.rewind(1);
@@ -266,7 +260,7 @@ impl Parser {
         } else {
             return Err(format!(
                 "Syntax error: Expected 'while' or 'until', found {:?}",
-                self.current
+                self.current()
             ));
         }
         let mut condition = AndOrNode::Pipeline(Box::new(self.parse_pipeline()?));
@@ -296,7 +290,7 @@ impl Parser {
             None => {
                 err = format!(
                     "Syntax error: Expected some command, instead found '{:?}'.",
-                    self.current
+                    self.current()
                 );
                 Argument::Name("".to_string())
             }
@@ -337,13 +331,12 @@ impl Parser {
         let mut key: usize = 0;
         let mut val: Option<Argument> = None;
         if self.current_is(ShTokenType::Name) {
-            key = self.current;
+            key = self.loc;
             self.next_token(); // skip the key
             if !self.try_consume(ShTokenType::Equal) {
                 // if we don't have an equal sign then we need to rewind
                 // the token stream to the beginning of the assignment
                 self.loc = current_location;
-                self.current = self.loc;
                 return Ok(None);
             }
             val = self.parse_argument()?;
@@ -355,8 +348,6 @@ impl Parser {
             }));
         } else if current_location < self.token.len() {
             self.loc = current_location;
-            self.current = self.loc;
-            self.prev = self.loc - 1;
         } else {
             return Err(format!(
                 "Syntax error: Unexpected end of file after {:?}",
@@ -430,7 +421,7 @@ impl Parser {
             None => {
                 return Err(format!(
                     "Syntax error: Expected a file name after '{:?}'",
-                    self.current
+                    self.current()
                 ))
             }
         };
@@ -605,11 +596,7 @@ impl Parser {
     }
 
     fn rewind(&mut self, n: usize) {
-        let loc = self.loc.saturating_sub(n);
-        self.loc = loc;
-        if self.loc < self.token.len() {
-            self.current = self.loc;
-        }
+        self.loc = self.loc.saturating_sub(n);
     }
 
     fn consume_current(&mut self) -> &Token {
@@ -621,30 +608,19 @@ impl Parser {
         // this seems really wasteful but the borrow checker beat me up -- how do we change current
         // and prev to be references?
         self.loc += 1;
-        if self.loc >= self.token.len() {
-            if self.loc > 0 && self.loc - 1 < self.token.len() {
-                self.prev = self.loc - 1;
-            }
-            self.current = self.token.len();
-        } else {
-            self.current = self.loc;
-            if self.loc > 0 {
-                self.prev = self.loc - 1;
-            }
-        }
     }
 
     fn current(&self) -> &Token {
-        if self.current < self.token.len() {
-            &self.token[self.current]
+        if self.loc < self.token.len() {
+            &self.token[self.loc]
         } else {
             &ENDOFFILE
         }
     }
 
     fn prev(&self) -> &Token {
-        if self.prev < self.token.len() {
-            &self.token[self.prev]
+        if self.loc > 0 && self.loc < self.token.len() + 1 {
+            &self.token[self.loc - 1]
         } else {
             &ENDOFFILE
         }
