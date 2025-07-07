@@ -11,7 +11,7 @@ use std::process;
 use std::process::Stdio;
 use std::process::{Command, ExitStatus};
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::{env, io};
 
 pub type FunctionStack = Rc<RefCell<Vec<Rc<Vec<Argument>>>>>; // ??
@@ -26,9 +26,9 @@ pub struct State {
 }
 
 impl State {
-    pub fn new() -> Arc<Mutex<State>> {
+    pub fn new() -> Rc<RefCell<State>> {
         #[allow(clippy::arc_with_non_send_sync)]
-        Arc::new(Mutex::new(State {
+        Rc::new(RefCell::new(State {
             bg_jobs: Vec::new(),
             fg_jobs: Vec::new(),
             prev_status: 0,
@@ -39,56 +39,62 @@ impl State {
                     "cd".to_string(),
                     BuiltIn {
                         name: "cd".to_string(),
-                        command: Rc::new(|args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
-                            change_dir::ChangeDir::new(&args[0].eval(&state)).eval()
-                        }),
+                        command: Rc::new(
+                            |args: &Vec<Argument>, state: Rc<RefCell<State>>| -> i32 {
+                                change_dir::ChangeDir::new(&args[0].eval(&state)).eval()
+                            },
+                        ),
                     },
                 ),
                 (
                     "jobs".to_string(),
                     BuiltIn {
                         name: "jobs".to_string(),
-                        command: Rc::new(|args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
-                            let opt = args.first().and_then(|arg| match arg {
-                                Argument::Name(arg) => Some(arg.as_str()),
-                                _ => None,
-                            });
-                            handle_jobs_cmd(opt, &state);
-                            0
-                        }),
+                        command: Rc::new(
+                            |args: &Vec<Argument>, state: Rc<RefCell<State>>| -> i32 {
+                                let opt = args.first().and_then(|arg| match arg {
+                                    Argument::Name(arg) => Some(arg.as_str()),
+                                    _ => None,
+                                });
+                                handle_jobs_cmd(opt, &state);
+                                0
+                            },
+                        ),
                     },
                 ),
                 (
                     "true".to_string(),
                     BuiltIn {
                         name: "true".to_string(),
-                        command: Rc::new(|_: &Vec<Argument>, _: Arc<Mutex<State>>| -> i32 { 0 }),
+                        command: Rc::new(|_: &Vec<Argument>, _: Rc<RefCell<State>>| -> i32 { 0 }),
                     },
                 ),
                 (
                     "false".to_string(),
                     BuiltIn {
                         name: "true".to_string(),
-                        command: Rc::new(|_: &Vec<Argument>, _: Arc<Mutex<State>>| -> i32 { 1 }),
+                        command: Rc::new(|_: &Vec<Argument>, _: Rc<RefCell<State>>| -> i32 { 1 }),
                     },
                 ),
                 (
                     "astview".to_string(),
                     BuiltIn {
                         name: "astview".to_string(),
-                        command: Rc::new(|args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
-                            let mut parser = Parser::new(state.clone());
-                            parser.parse(&args[0].eval(&state));
-                            println!("{:#?}", parser.exprs);
-                            0
-                        }),
+                        command: Rc::new(
+                            |args: &Vec<Argument>, state: Rc<RefCell<State>>| -> i32 {
+                                let mut parser = Parser::new(state.clone());
+                                parser.parse(&args[0].eval(&state));
+                                println!("{:#?}", parser.exprs);
+                                0
+                            },
+                        ),
                     },
                 ),
                 (
                     "help".to_string(),
                     BuiltIn {
                         name: "help".to_string(),
-                        command: Rc::new(|_: &Vec<Argument>, _: Arc<Mutex<State>>| -> i32 {
+                        command: Rc::new(|_: &Vec<Argument>, _: Rc<RefCell<State>>| -> i32 {
                             println!("slush: A shell you can drink!");
                             println!("\nBuiltins:");
                             println!("  cd <dir> - change directory");
@@ -107,15 +113,17 @@ impl State {
                     "exit".to_string(),
                     BuiltIn {
                         name: "exit".to_string(),
-                        command: Rc::new(|args: &Vec<Argument>, state: Arc<Mutex<State>>| -> i32 {
-                            if !args.is_empty() {
-                                std::process::exit(
-                                    args[0].eval(&state).parse().unwrap_or_default(),
-                                );
-                            } else {
-                                std::process::exit(0);
-                            }
-                        }),
+                        command: Rc::new(
+                            |args: &Vec<Argument>, state: Rc<RefCell<State>>| -> i32 {
+                                if !args.is_empty() {
+                                    std::process::exit(
+                                        args[0].eval(&state).parse().unwrap_or_default(),
+                                    );
+                                } else {
+                                    std::process::exit(0);
+                                }
+                            },
+                        ),
                     },
                 ),
             ]),
@@ -144,8 +152,8 @@ pub struct FunctionExpr {
 }
 
 impl FunctionExpr {
-    pub fn eval(&mut self, state: &Arc<Mutex<State>>) -> i32 {
-        state.lock().unwrap().functions.insert(
+    pub fn eval(&mut self, state: &Rc<RefCell<State>>) -> i32 {
+        state.borrow_mut().functions.insert(
             self.fname.clone(),
             Rc::new(RefCell::new(self.commands.clone())),
         );
@@ -187,7 +195,7 @@ pub struct PipeLineExpr {
     pub capture_out: Option<Rc<RefCell<String>>>,
     pub file_redirect: Option<RedirectExpr>,
     pub background: bool,
-    pub state: Arc<Mutex<State>>,
+    pub state: Rc<RefCell<State>>,
 }
 
 impl PartialEq for PipeLineExpr {
@@ -260,7 +268,7 @@ pub struct ForExpr {
 }
 
 impl ForExpr {
-    pub fn eval(&mut self, state: &Arc<Mutex<State>>) -> i32 {
+    pub fn eval(&mut self, state: &Rc<RefCell<State>>) -> i32 {
         let mut ret = 0;
         for arg in &self.list {
             env::set_var(&self.name, arg.eval(state));
@@ -396,7 +404,7 @@ impl SubShellExpr {
 }
 
 impl AssignmentExpr {
-    fn eval(&mut self, state: &Arc<Mutex<State>>) -> i32 {
+    fn eval(&mut self, state: &Rc<RefCell<State>>) -> i32 {
         unsafe {
             env::set_var(&self.key, self.val.eval(state));
         }
@@ -405,7 +413,7 @@ impl AssignmentExpr {
 }
 
 impl CommandExpr {
-    pub fn build_command_str(&self, state: &Arc<Mutex<State>>) -> CommandStr {
+    pub fn build_command_str(&self, state: &Rc<RefCell<State>>) -> CommandStr {
         let com = self.command.eval(state);
         let mut parts = vec![com];
         for arg in &*self.arguments {
@@ -430,7 +438,7 @@ impl CommandStr {
     }
 }
 
-type BuiltInEval = Rc<dyn Fn(&Vec<Argument>, Arc<Mutex<State>>) -> i32>;
+type BuiltInEval = Rc<dyn Fn(&Vec<Argument>, Rc<RefCell<State>>) -> i32>;
 pub struct BuiltIn {
     name: String,
     command: BuiltInEval,
@@ -486,26 +494,12 @@ impl PipeLineExpr {
 
                     let base_command = exp.command.eval(&self.state.clone());
 
-                    if let Some(command) = self
-                        .state
-                        .clone()
-                        .lock()
-                        .unwrap()
-                        .built_ins
-                        .get(&base_command)
-                    {
+                    if let Some(command) = self.state.borrow().built_ins.get(&base_command) {
                         jobs.push(SlushJob::Builtin(command.clone(), exp.arguments.clone()));
                         continue;
                     }
 
-                    if self
-                        .state
-                        .clone()
-                        .lock()
-                        .unwrap()
-                        .functions
-                        .contains_key(&base_command)
-                    {
+                    if self.state.borrow().functions.contains_key(&base_command) {
                         jobs.push(SlushJob::Function(base_command, exp.arguments.clone()));
                         continue;
                     }
@@ -513,7 +507,7 @@ impl PipeLineExpr {
                     let cmd_str = exp.build_command_str(&self.state.clone());
                     let mut cmd = cmd_str.build_command();
 
-                    let mut state = self.state.lock().expect("unable to acquire lock");
+                    let mut state = self.state.borrow_mut();
 
                     if let Some(job) = jobs.last_mut() {
                         match job {
@@ -665,18 +659,13 @@ impl PipeLineExpr {
                     exit_status = (builtin.command)(args, self.state.clone());
                 }
                 SlushJob::Function(function, args) => {
-                    let argstack = self.state.lock().expect("AHH").argstack.clone();
+                    let argstack = self.state.borrow().argstack.clone();
                     let aa = args
                         .iter()
                         .map(|a| -> Argument { Argument::Name(a.eval(&self.state)) })
                         .collect();
                     argstack.borrow_mut().push(Rc::new(aa));
-                    let mut functions = self
-                        .state
-                        .lock()
-                        .expect("Couldn't get lock")
-                        .functions
-                        .clone();
+                    let mut functions = self.state.borrow_mut().functions.clone();
                     let pl = functions.get_mut(function).unwrap().clone();
                     {
                         let mut ppl = pl.borrow_mut();
@@ -685,7 +674,7 @@ impl PipeLineExpr {
                         }
                     }
 
-                    let argstack = &mut self.state.lock().expect("AHH").argstack;
+                    let argstack = &mut self.state.borrow_mut().argstack;
                     argstack.borrow_mut().pop();
                 }
             }
@@ -708,7 +697,7 @@ pub struct MergeExpr {
 }
 
 impl MergeExpr {
-    pub fn eval(&self, state: &Arc<Mutex<State>>) -> String {
+    pub fn eval(&self, state: &Rc<RefCell<State>>) -> String {
         self.left.eval(state) + &self.right.eval(state)
     }
 }
@@ -723,7 +712,7 @@ pub enum ExpansionExpr {
 }
 
 impl ExpansionExpr {
-    fn eval(&self, state: &Arc<Mutex<State>>) -> String {
+    fn eval(&self, state: &Rc<RefCell<State>>) -> String {
         match self {
             ExpansionExpr::ParameterExpansion(var) => {
                 get_variable(var.clone(), state).unwrap_or_default()
@@ -767,7 +756,7 @@ pub enum Argument {
 }
 
 impl Argument {
-    fn eval(&self, state: &Arc<Mutex<State>>) -> String {
+    fn eval(&self, state: &Rc<RefCell<State>>) -> String {
         match self {
             Argument::Name(n) => n.clone(),
             Argument::Variable(variable) => {
@@ -780,23 +769,23 @@ impl Argument {
     }
 }
 
-fn get_variable(var: String, state: &Arc<Mutex<State>>) -> Option<String> {
+fn get_variable(var: String, state: &Rc<RefCell<State>>) -> Option<String> {
     let s = state.clone();
     match var.as_str() {
         "0" => Some(String::from("slush")),
-        "!" => Some(if let Some(job) = state.lock().unwrap().bg_jobs.last() {
+        "!" => Some(if let Some(job) = state.borrow().bg_jobs.last() {
             job.child.id().to_string()
         } else {
             String::from("0")
         }),
-        "?" => Some(state.lock().unwrap().prev_status.to_string()),
+        "?" => Some(state.borrow().prev_status.to_string()),
         "$" => Some(process::id().to_string()),
         "*" | "#" | "-" => {
             panic!("'{var}' parameters are not yet supported")
         }
         _ => {
             if let Ok(number) = var.parse::<usize>() {
-                let argstack = s.lock().unwrap().argstack.clone();
+                let argstack = s.borrow().argstack.clone();
 
                 let args = argstack.borrow();
                 args.last().map(|a| {
@@ -860,10 +849,10 @@ pub struct Output {
     _stderr: Vec<u8>,
 }
 
-fn handle_jobs_cmd(opt: Option<&str>, state: &Arc<Mutex<State>>) {
+fn handle_jobs_cmd(opt: Option<&str>, state: &Rc<RefCell<State>>) {
     match opt {
         None => {
-            let state = state.lock().expect("unable to acquire lock");
+            let state = state.borrow();
             for (job_num, job) in state.bg_jobs.iter().enumerate() {
                 // Todo: display <current>.
                 print!("[{}] {}", job_num + 1, job.status());
@@ -874,7 +863,7 @@ fn handle_jobs_cmd(opt: Option<&str>, state: &Arc<Mutex<State>>) {
             }
         }
         Some("-p") => {
-            let state = state.lock().expect("unable to acquire lock");
+            let state = state.borrow();
             for job in state.bg_jobs.iter() {
                 println!("{}", job.pid);
             }

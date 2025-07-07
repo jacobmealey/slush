@@ -6,7 +6,7 @@ use crate::expr::{
 };
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::LazyLock;
 
 use crate::tokenizer::{tokens, ShTokenType, Token};
 
@@ -20,11 +20,11 @@ pub struct Parser {
     pub exprs: Vec<AndOrNode>,
     loc: usize,
     pub err: String,
-    state: Arc<Mutex<State>>,
+    state: Rc<RefCell<State>>,
 }
 
 impl Parser {
-    pub fn new(state: Arc<Mutex<State>>) -> Parser {
+    pub fn new(state: Rc<RefCell<State>>) -> Parser {
         Parser {
             token: Vec::new(),
             exprs: Vec::new(),

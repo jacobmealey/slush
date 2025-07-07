@@ -40,7 +40,7 @@ fn repl() {
         let s = state.clone();
         {
             let passed_args: Vec<String> = env::args().collect();
-            let script_args = &mut s.lock().unwrap().argstack;
+            let script_args = &mut s.borrow_mut().argstack;
             script_args.borrow_mut().push(Rc::new(
                 passed_args
                     .into_iter()
@@ -56,35 +56,21 @@ fn repl() {
             return;
         } else {
             for mut expr in parser.exprs {
-                s.lock().unwrap().prev_status = expr.eval();
+                s.borrow_mut().prev_status = expr.eval();
             }
         }
-        std::process::exit(state.clone().lock().unwrap().prev_status);
+        std::process::exit(state.borrow().prev_status);
     } else {
         println!("Hello, Slush!");
         let s = state.clone();
-        //let handler_state = state.clone();
-        // Disabling this until
-        // ctrlc::set_handler(move || {
-        //     for job in &mut handler_state.lock().expect("Could not unlock jobs").fg_jobs {
-        //         job.child.kill().unwrap();
-        //     }
-        //     println!();
-        //     handler_state
-        //         .lock()
-        //         .expect("Could not unlock jobs")
-        //         .fg_jobs
-        //         .clear();
-        // })
-        // .expect("Error ignoring control C");
         loop {
             if *PRUNE_JOBS.lock().unwrap() {
-                let mut jobs = state.lock().unwrap();
+                let mut jobs = state.borrow_mut();
                 jobs.fg_jobs
                     .retain(|job| job.child.try_wait().unwrap().is_some());
                 *PRUNE_JOBS.lock().unwrap() = false;
             }
-            print!("[{}] $ ", state.lock().unwrap().prev_status);
+            print!("[{}] $ ", state.borrow().prev_status);
             stdout.flush().expect("Error flushing to stdout");
             let line = match stdin.lock().lines().next() {
                 Some(Ok(line)) => line,
@@ -97,11 +83,11 @@ fn repl() {
                 continue;
             } else {
                 for expr in &mut parser.exprs {
-                    s.lock().unwrap().prev_status = expr.eval();
+                    s.borrow_mut().prev_status = expr.eval();
                 }
             }
 
-            s.lock().expect("Could not unlock jobs").fg_jobs.clear();
+            s.borrow_mut().fg_jobs.clear();
         }
     }
 }
