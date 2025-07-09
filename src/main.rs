@@ -17,6 +17,10 @@ pub extern "C" fn sigchld_handler(_signum: i32) {
     *jobs = true;
 }
 
+pub extern "C" fn sigint_handler(_signum: i32) {
+    // Handle SIGINT (Ctrl+C) do nothing
+}
+
 fn repl() {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
@@ -34,6 +38,12 @@ fn repl() {
             signal::SigHandler::Handler(sigchld_handler),
         )
         .expect("Error setting signal handler");
+
+        signal::signal(
+            signal::Signal::SIGINT,
+            signal::SigHandler::Handler(sigint_handler),
+        )
+        .expect("Error setting signal handler for SIGINT");
     }
     if let Some(arg) = env::args().nth(1) {
         let code_str = std::fs::read_to_string(arg).expect("Error reading file");
