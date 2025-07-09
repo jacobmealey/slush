@@ -534,8 +534,7 @@ impl Parser {
             self.next_token();
             if self.current_is(ShTokenType::EndOfFile) {
                 return Err(format!(
-                    "Syntax Error: Unexpected end of file, no matching '{:?}'",
-                    right
+                    "Syntax Error: Unexpected end of file, no matching '{right:?}'"
                 ));
             }
             count += if self.current_is(left) {
@@ -558,8 +557,7 @@ impl Parser {
         while !self.try_consume(stop) {
             if self.current_is(ShTokenType::EndOfFile) {
                 return Err(format!(
-                    "Syntax Error: Unexpected end of file, no matching '{:?}'",
-                    stop
+                    "Syntax Error: Unexpected end of file, no matching '{stop:?}'"
                 ));
             }
             ret.push_str(&self.current().lexeme);

@@ -109,7 +109,7 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
             ret.push(it.next().unwrap());
         }
         if it.peek().is_none() {
-            return Err(format!("Couldn't find second '{}'.", token));
+            return Err(format!("Couldn't find second '{token}'."));
         }
         it.next();
         Ok(ret)

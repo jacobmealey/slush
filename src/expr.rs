@@ -622,7 +622,7 @@ impl PipeLineExpr {
                     let n = match file.read(&mut buffer) {
                         Ok(n) => n,
                         Err(e) => {
-                            println!("{:?}", e);
+                            println!("{e:?}");
                             return 1;
                         }
                     };
@@ -630,7 +630,7 @@ impl PipeLineExpr {
                         break;
                     }
                     if let Err(e) = stdin.write(&buffer[..n]) {
-                        panic!("Error writing to stdin: {}", e);
+                        panic!("Error writing to stdin: {e}");
                     }
                 }
                 drop(stdin);
@@ -724,7 +724,7 @@ impl ExpansionExpr {
                 }
             }
             ExpansionExpr::ParameterError(var, err) => {
-                eprintln!("slush: {}: {}", var, err);
+                eprintln!("slush: {var}: {err}");
                 std::process::exit(1);
             }
             ExpansionExpr::ParameterAssign(var, default) => {
