@@ -442,7 +442,6 @@ type BuiltInEval = Rc<dyn Fn(&Vec<Argument>, Rc<RefCell<State>>) -> i32>;
 pub struct BuiltIn {
     name: String,
     command: BuiltInEval,
-    // stream: ?? what will this be?
 }
 
 impl Clone for BuiltIn {
@@ -459,10 +458,6 @@ impl Debug for BuiltIn {
         f.debug_struct("BuiltIn").field("name", &self.name).finish()
     }
 }
-
-// how do we do this w/ out unsafe?
-unsafe impl Send for BuiltIn {}
-unsafe impl Sync for BuiltIn {}
 
 #[derive(Debug, Clone)]
 enum SlushJob {
