@@ -789,7 +789,12 @@ fn get_variable(var: String, state: &Rc<RefCell<State>>) -> Option<String> {
                         .eval(state)
                 })
             } else {
-                Some(env::var(var).unwrap_or_default())
+                let text = env::var(var).unwrap_or_default();
+                if text.is_empty() {
+                    None
+                } else {
+                    Some(text)
+                }
             }
         }
     }
