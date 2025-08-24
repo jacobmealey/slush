@@ -780,7 +780,7 @@ fn get_variable(var: String, state: &Rc<RefCell<State>>) -> Option<String> {
         }),
         "?" => Some(state.borrow().prev_status.to_string()),
         "$" => Some(process::id().to_string()),
-        "*" | "#" | "-" => {
+        "*" | "#" | "-" | "@" => {
             panic!("'{var}' parameters are not yet supported")
         }
         _ => {

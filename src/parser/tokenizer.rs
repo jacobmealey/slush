@@ -114,18 +114,32 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
         it.next();
         Ok(ret)
     };
+    let mut in_sub = false;
     let mut it = st.chars().peekable();
     while let Some(c) = it.next() {
-        if c == '#' {
-            // this is ugly
-            for cc in it.by_ref() {
-                if cc == '\n' {
-                    break;
+        let token = match c {
+            '#' => {
+                if in_sub
+                    || tokens.last().is_some()
+                        && tokens.last().unwrap().token_type == ShTokenType::DollarSign
+                {
+                    Token {
+                        lexeme: String::from('#'),
+                        token_type: ShTokenType::Pound,
+                    }
+                } else {
+                    // this is ugly
+                    for cc in it.by_ref() {
+                        if cc == '\n' {
+                            break;
+                        }
+                    }
+                    Token {
+                        lexeme: String::from('\n'),
+                        token_type: ShTokenType::NewLine,
+                    }
                 }
             }
-            continue;
-        }
-        let token = match c {
             '\n' => Token {
                 lexeme: String::from(c),
                 token_type: ShTokenType::NewLine,
@@ -176,14 +190,20 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
                 lexeme: String::from(c),
                 token_type: ShTokenType::RightParen,
             },
-            '{' => Token {
-                lexeme: String::from(c),
-                token_type: ShTokenType::LeftBrace,
-            },
-            '}' => Token {
-                lexeme: String::from(c),
-                token_type: ShTokenType::RightBrace,
-            },
+            '{' => {
+                in_sub = true;
+                Token {
+                    lexeme: String::from(c),
+                    token_type: ShTokenType::LeftBrace,
+                }
+            }
+            '}' => {
+                in_sub = false;
+                Token {
+                    lexeme: String::from(c),
+                    token_type: ShTokenType::RightBrace,
+                }
+            }
             '@' => Token {
                 lexeme: String::from(c),
                 token_type: ShTokenType::AtSign,
@@ -191,10 +211,6 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
             '*' => Token {
                 lexeme: String::from(c),
                 token_type: ShTokenType::Star,
-            },
-            '#' => Token {
-                lexeme: String::from(c),
-                token_type: ShTokenType::Pound,
             },
             '~' => Token {
                 lexeme: String::from(c),

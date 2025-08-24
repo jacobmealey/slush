@@ -367,10 +367,10 @@ impl Parser {
             if !self.current_is(ShTokenType::Name) {
                 return Err(String::from("Expected a name after '#'"));
             }
-
-            return Ok(ExpansionExpr::StringLengthExpansion(
-                self.current().lexeme.clone(),
-            ));
+            let varname = self.current().lexeme.clone();
+            self.next_token();
+            self.consume(ShTokenType::RightBrace)?;
+            return Ok(ExpansionExpr::StringLengthExpansion(varname));
         } else if self.current_is(ShTokenType::Name) {
             // we are doing some type expansion thiny
             let name = self.current().lexeme.clone();
@@ -483,11 +483,13 @@ impl Parser {
                     ShTokenType::LeftBrace => {
                         Ok(Some(Argument::Expansion(self.parse_expansion()?)))
                     }
-                    ShTokenType::DollarSign | ShTokenType::Bang | ShTokenType::Star => {
-                        Ok(Some(Argument::Variable(VariableLookup {
-                            name: self.consume_current().lexeme.clone(),
-                        })))
-                    }
+                    ShTokenType::DollarSign
+                    | ShTokenType::Bang
+                    | ShTokenType::Star
+                    | ShTokenType::Pound
+                    | ShTokenType::AtSign => Ok(Some(Argument::Variable(VariableLookup {
+                        name: self.consume_current().lexeme.clone(),
+                    }))),
                     _ => Err("Expected some value after '$'".to_string()),
                 }
             }
