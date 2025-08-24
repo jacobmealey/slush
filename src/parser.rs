@@ -100,14 +100,17 @@ impl Parser {
             }
         });
         while self.try_consume(ShTokenType::Pipe) {
-            pipeline.push(match self.current().token_type {
-                ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
-                ShTokenType::While | ShTokenType::Until => {
-                    CompoundList::Whileexpr(self.parse_while()?)
-                }
-                ShTokenType::For => CompoundList::Forexpr(self.parse_for()?),
+            self.skip_whitespace();
+            let cmd = match self.current().token_type {
+                ShTokenType::If
+                | ShTokenType::While
+                | ShTokenType::Until
+                | ShTokenType::For => {
+                    return Err("Internal Error: Slush does not support control flow in a pipeline\n".to_string());
+                },
                 _ => CompoundList::Commandexpr(self.parse_command()?),
-            });
+            };
+            pipeline.push(cmd);
         }
 
         let mut file_redirect = None;
