@@ -222,24 +222,24 @@ pub struct IfExpr {
 }
 
 impl IfExpr {
-    pub fn eval(&mut self) -> i32 {
-        if self.condition.eval() == 0 {
+    pub fn eval(&mut self) -> Result<i32, String> {
+        if self.condition.eval()? == 0 {
             for command in &mut self.if_branch {
-                command.eval();
+                command.eval()?;
             }
         } else if let Some(branch) = &mut self.else_branch {
             match branch {
                 IfBranch::Elif(ifb) => {
-                    ifb.eval();
+                    ifb.eval()?;
                 }
                 IfBranch::Else(elseb) => {
                     for command in elseb {
-                        command.eval();
+                        command.eval()?;
                     }
                 }
             };
         }
-        0
+        Ok(0)
     }
 }
 
@@ -250,13 +250,13 @@ pub struct WhileExpr {
 }
 
 impl WhileExpr {
-    pub fn eval(&mut self) -> i32 {
-        while self.condition.eval() == 0 {
+    pub fn eval(&mut self) -> Result<i32, String> {
+        while self.condition.eval()? == 0 {
             for command in &mut self.body {
-                command.eval();
+                command.eval()?;
             }
         }
-        0
+        Ok(0)
     }
 }
 
@@ -268,15 +268,15 @@ pub struct ForExpr {
 }
 
 impl ForExpr {
-    pub fn eval(&mut self, state: &Rc<RefCell<State>>) -> i32 {
+    pub fn eval(&mut self, state: &Rc<RefCell<State>>) -> Result<i32, String> {
         let mut ret = 0;
         for arg in &self.list {
             env::set_var(&self.name, arg.eval(state));
             for command in &mut self.commands {
-                ret = command.eval();
+                ret = command.eval()?;
             }
         }
-        ret
+        Ok(ret)
     }
 }
 
@@ -286,11 +286,11 @@ pub struct NotExpr {
 }
 
 impl NotExpr {
-    pub fn eval(&mut self) -> i32 {
-        if self.condition.eval() == 0 {
-            1
+    pub fn eval(&mut self) -> Result<i32, String> {
+        if self.condition.eval()? == 0 {
+            Ok(1)
         } else {
-            0
+            Ok(0)
         }
     }
 }
@@ -313,7 +313,7 @@ pub enum AndOrNode {
 }
 
 impl AndOrNode {
-    pub fn eval(&mut self) -> i32 {
+    pub fn eval(&mut self) -> Result<i32, String> {
         match self {
             AndOrNode::Pipeline(pl) => pl.eval(),
             AndOrNode::Andif(and) => and.eval(),
@@ -339,12 +339,12 @@ pub struct OrIf {
 }
 
 impl OrIf {
-    fn eval(&mut self) -> i32 {
-        let ll = self.left.eval();
+    fn eval(&mut self) -> Result<i32, String> {
+        let ll = self.left.eval()?;
         if ll != 0 {
             return self.right.eval();
         }
-        ll
+        Ok(ll)
     }
 
     pub fn set_output_capture(&mut self, capture: Rc<RefCell<String>>) {
@@ -360,13 +360,13 @@ pub struct AndIf {
 }
 
 impl AndIf {
-    fn eval(&mut self) -> i32 {
-        let ll = self.left.eval();
-        let rr = self.right.eval();
+    fn eval(&mut self) -> Result<i32, String> {
+        let ll = self.left.eval()?;
+        let rr = self.right.eval()?;
         if ll != 0 {
-            return ll;
+            return Ok(ll);
         }
-        rr
+        Ok(rr)
     }
 
     pub fn set_output_capture(&mut self, capture: Rc<RefCell<String>>) {
@@ -396,7 +396,7 @@ impl SubShellExpr {
         parser.parse(&self.shell);
         for mut expr in parser.exprs {
             expr.set_output_capture(shell_output.clone());
-            expr.eval();
+            let _ = expr.eval();
         }
         let x = shell_output.borrow().clone();
         x
@@ -467,14 +467,14 @@ enum SlushJob {
 }
 
 impl PipeLineExpr {
-    fn assemble_pipeline(&mut self) -> Vec<SlushJob> {
+    fn assemble_pipeline(&mut self) -> Result<Vec<SlushJob>, String> {
         let mut jobs: Vec<SlushJob> = Vec::new();
         let sz = self.pipeline.len();
         for (i, expr) in self.pipeline.iter_mut().enumerate() {
             match expr {
-                CompoundList::Ifexpr(ifxpr) => ifxpr.eval(),
-                CompoundList::Whileexpr(whlexpr) => whlexpr.eval(),
-                CompoundList::Forexpr(forexpr) => forexpr.eval(&self.state.clone()),
+                CompoundList::Ifexpr(ifxpr) => ifxpr.eval()?,
+                CompoundList::Whileexpr(whlexpr) => whlexpr.eval()?,
+                CompoundList::Forexpr(forexpr) => forexpr.eval(&self.state.clone())?,
                 CompoundList::Functionexpr(func) => func.eval(&self.state.clone()),
                 CompoundList::Commandexpr(exp) => {
                     if let Some(ref mut ass) = exp.assignment {
@@ -533,15 +533,19 @@ impl PipeLineExpr {
                         Ok(c) => match SharedChild::new(c) {
                             Ok(sc) => SlushJob::Child(Arc::new(sc)),
                             Err(v) => {
-                                panic!(
+                                return Err(format!(
                                     "Error creating shared child {}: {}",
                                     exp.command.eval(&self.state),
                                     v
-                                );
+                                ));
                             }
                         },
                         Err(v) => {
-                            panic!("Error spawning {}: {}", exp.command.eval(&self.state), v);
+                            return Err(format!(
+                                "Error spawning {}: {}",
+                                exp.command.eval(&self.state),
+                                v
+                            ));
                         }
                     });
 
@@ -562,10 +566,11 @@ impl PipeLineExpr {
                 }
             };
         }
-        jobs
+        Ok(jobs)
     }
-    fn eval(&mut self) -> i32 {
-        let jobs = self.assemble_pipeline();
+
+    fn eval(&mut self) -> Result<i32, String> {
+        let jobs = self.assemble_pipeline()?;
 
         let mut prev_child: Option<Arc<SharedChild>> = None;
         if let Some(SlushJob::Child(child)) = jobs.last() {
@@ -594,17 +599,17 @@ impl PipeLineExpr {
             let mut file = if *mode == RedirectType::OutAppend {
                 match File::options().append(true).open(filename) {
                     Ok(f) => f,
-                    Err(_) => return 1,
+                    Err(_) => return Ok(1),
                 }
             } else if *mode == RedirectType::Out {
                 match File::create(filename) {
                     Ok(f) => f,
-                    Err(_) => return 1,
+                    Err(_) => return Ok(1),
                 }
             } else if *mode == RedirectType::In {
                 match File::open(filename) {
                     Ok(f) => f,
-                    Err(_) => return 1,
+                    Err(_) => return Ok(1),
                 }
             } else {
                 panic!("Unexpected for redirect! Error Error!");
@@ -623,7 +628,7 @@ impl PipeLineExpr {
                         Ok(n) => n,
                         Err(e) => {
                             println!("{e:?}");
-                            return 1;
+                            return Ok(1);
                         }
                     };
                     if n == 0 {
@@ -665,7 +670,7 @@ impl PipeLineExpr {
                     {
                         let mut ppl = pl.borrow_mut();
                         for pipeline in ppl.iter_mut() {
-                            exit_status = pipeline.eval();
+                            exit_status = pipeline.eval()?;
                         }
                     }
 
@@ -675,7 +680,7 @@ impl PipeLineExpr {
             }
         }
 
-        exit_status
+        Ok(exit_status)
     }
 }
 

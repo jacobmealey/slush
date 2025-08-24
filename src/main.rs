@@ -66,7 +66,12 @@ fn repl() {
             return;
         } else {
             for mut expr in parser.exprs {
-                s.borrow_mut().prev_status = expr.eval();
+                let expr_status = expr.eval();
+                if let Ok(status) = expr_status {
+                    s.borrow_mut().prev_status = status;
+                } else if let Err(err) = expr_status {
+                    println!("{err}");
+                }
             }
         }
         std::process::exit(state.borrow().prev_status);
@@ -93,7 +98,12 @@ fn repl() {
                 continue;
             } else {
                 for expr in &mut parser.exprs {
-                    s.borrow_mut().prev_status = expr.eval();
+                    let expr_status = expr.eval();
+                    if let Ok(status) = expr_status {
+                        s.borrow_mut().prev_status = status;
+                    } else if let Err(err) = expr_status {
+                        println!("{err}");
+                    }
                 }
             }
 

@@ -102,12 +102,12 @@ impl Parser {
         while self.try_consume(ShTokenType::Pipe) {
             self.skip_whitespace();
             let cmd = match self.current().token_type {
-                ShTokenType::If
-                | ShTokenType::While
-                | ShTokenType::Until
-                | ShTokenType::For => {
-                    return Err("Internal Error: Slush does not support control flow in a pipeline\n".to_string());
-                },
+                ShTokenType::If | ShTokenType::While | ShTokenType::Until | ShTokenType::For => {
+                    return Err(
+                        "Internal Error: Slush does not support control flow in a pipeline\n"
+                            .to_string(),
+                    );
+                }
                 _ => CompoundList::Commandexpr(self.parse_command()?),
             };
             pipeline.push(cmd);
