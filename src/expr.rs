@@ -770,22 +770,46 @@ impl Argument {
 }
 
 fn get_variable(var: String, state: &Rc<RefCell<State>>) -> Option<String> {
-    let s = state.clone();
+    let s = state.borrow();
     match var.as_str() {
         "0" => Some(String::from("slush")),
-        "!" => Some(if let Some(job) = state.borrow().bg_jobs.last() {
+        "!" => Some(if let Some(job) = s.bg_jobs.last() {
             job.child.id().to_string()
         } else {
             String::from("0")
         }),
         "?" => Some(state.borrow().prev_status.to_string()),
         "$" => Some(process::id().to_string()),
-        "*" | "#" | "-" | "@" => {
+        "@" | "*" => {
+            // I don't think '*' is the 'spec complient'
+            let argstack = s.argstack.borrow();
+            if argstack.len() == 0 {
+                return Some(String::default());
+            }
+            Some(
+                argstack
+                    .last()
+                    .unwrap()
+                    .iter()
+                    .map(|arg| arg.eval(state))
+                    .reduce(|whole, new| whole.to_owned() + " " + &new)
+                    .unwrap()
+                    .to_string(),
+            )
+        }
+        "#" => {
+            let argstack = s.argstack.borrow();
+            if argstack.len() == 0 {
+                return Some(String::default());
+            }
+            Some(format!("{}", argstack.last().unwrap().len()))
+        }
+        "-" => {
             panic!("'{var}' parameters are not yet supported")
         }
         _ => {
             if let Ok(number) = var.parse::<usize>() {
-                let argstack = s.borrow().argstack.clone();
+                let argstack = s.argstack.clone();
 
                 let args = argstack.borrow();
                 args.last().map(|a| {
