@@ -783,7 +783,7 @@ fn get_variable(var: String, state: &Rc<RefCell<State>>) -> Option<String> {
         "@" | "*" => {
             // I don't think '*' is the 'spec complient'
             let argstack = s.argstack.borrow();
-            if argstack.len() == 0 {
+            if argstack.is_empty() {
                 return Some(String::default());
             }
             Some(
@@ -799,7 +799,7 @@ fn get_variable(var: String, state: &Rc<RefCell<State>>) -> Option<String> {
         }
         "#" => {
             let argstack = s.argstack.borrow();
-            if argstack.len() == 0 {
+            if argstack.is_empty() {
                 return Some(String::default());
             }
             Some(format!("{}", argstack.last().unwrap().len()))
