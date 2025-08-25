@@ -29,11 +29,12 @@ is a list of objectives for the near term. The to-do list is always growing as I
   - [x] Assigning Variables
   - [ ] Special Parameters
     - [x] previous exit status
-    - [ ] Positional params
+    - [x] Positional params
     - [x] PID of subshell
-    - [ ] PID of most recent background
+    - [x] PID of most recent background
     - [x] Name and shell startups 
-- [ ] Control Flow
+    - [ ] Hyphen for view of options set
+- [x] Control Flow
   - [x] if
   - [x] elif
   - [x] else
