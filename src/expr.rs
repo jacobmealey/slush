@@ -776,17 +776,17 @@ fn evaluate_string(string: &str, state: &Rc<RefCell<State>>) -> Option<String> {
     let mut chars = string.chars().peekable();
     while let Some(c) = chars.next() {
         if c == '$' {
-           let mut var = String::default();
-           'varloop: while let Some(v) = chars.peek() {
+            let mut var = String::default();
+            'varloop: while let Some(v) = chars.peek() {
                 if *v != ' ' && *v != '$' {
-                   var.push(*v);
-                   chars.next();
+                    var.push(*v);
+                    chars.next();
                 } else {
-                    break 'varloop
+                    break 'varloop;
                 }
-           }
-           println!("looking up {var}");
-           ret += &get_variable(var, state).unwrap_or_default();
+            }
+            println!("looking up {var}");
+            ret += &get_variable(var, state).unwrap_or_default();
         } else {
             ret.push(c);
         }
