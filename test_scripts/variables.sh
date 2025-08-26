@@ -8,3 +8,4 @@ echo ${FOO}
 echo ${SOME:-default}
 echo ${SOME:=peple}
 echo $SOME
+

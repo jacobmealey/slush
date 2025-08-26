@@ -1,5 +1,6 @@
 pub mod change_dir;
 use crate::parser::Parser;
+use crate::tokenizer;
 use shared_child::SharedChild;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -749,6 +750,7 @@ impl ExpansionExpr {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Argument {
     Name(String),
+    QuoteString(String),
     Variable(VariableLookup),
     SubShell(SubShellExpr),
     Merge(MergeExpr),
@@ -765,8 +767,17 @@ impl Argument {
             Argument::SubShell(ss) => ss.stdout(),
             Argument::Merge(merge) => merge.eval(state),
             Argument::Expansion(expansion) => expansion.eval(state),
+            Argument::QuoteString(string) => evaluate_string(string, state).unwrap_or_default(),
         }
     }
+}
+
+fn evaluate_string(string: &str, _state: &Rc<RefCell<State>>) -> Option<String> {
+    let token_list = tokenizer::tokens(string).expect("Unable to parse string");
+    token_list
+        .iter()
+        .map(|s| s.lexeme.clone())
+        .reduce(|whole, next| whole + &next)
 }
 
 fn get_variable(var: String, state: &Rc<RefCell<State>>) -> Option<String> {

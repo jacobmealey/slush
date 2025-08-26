@@ -497,6 +497,9 @@ impl Parser {
             ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
                 shell: self.consume_current().lexeme.clone(),
             }))),
+            ShTokenType::DoubleQuoteStr => Ok(Some(Argument::QuoteString(
+                self.consume_current().lexeme.clone(),
+            ))),
             ShTokenType::WhiteSpace
             | ShTokenType::NewLine
             | ShTokenType::SemiColon
