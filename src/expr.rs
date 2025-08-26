@@ -1,6 +1,5 @@
 pub mod change_dir;
 use crate::parser::Parser;
-use crate::tokenizer;
 use shared_child::SharedChild;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -772,12 +771,27 @@ impl Argument {
     }
 }
 
-fn evaluate_string(string: &str, _state: &Rc<RefCell<State>>) -> Option<String> {
-    let token_list = tokenizer::tokens(string).expect("Unable to parse string");
-    token_list
-        .iter()
-        .map(|s| s.lexeme.clone())
-        .reduce(|whole, next| whole + &next)
+fn evaluate_string(string: &str, state: &Rc<RefCell<State>>) -> Option<String> {
+    let mut ret = String::default();
+    let mut chars = string.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '$' {
+           let mut var = String::default();
+           'varloop: while let Some(v) = chars.peek() {
+                if *v != ' ' && *v != '$' {
+                   var.push(*v);
+                   chars.next();
+                } else {
+                    break 'varloop
+                }
+           }
+           println!("looking up {var}");
+           ret += &get_variable(var, state).unwrap_or_default();
+        } else {
+            ret.push(c);
+        }
+    }
+    Some(ret)
 }
 
 fn get_variable(var: String, state: &Rc<RefCell<State>>) -> Option<String> {
