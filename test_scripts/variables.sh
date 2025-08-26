@@ -9,3 +9,5 @@ echo ${SOME:-default}
 echo ${SOME:=peple}
 echo $SOME
 
+echo "$SOME$SOME" "$FOO" hello "  $VAR" 
+

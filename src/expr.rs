@@ -785,7 +785,6 @@ fn evaluate_string(string: &str, state: &Rc<RefCell<State>>) -> Option<String> {
                     break 'varloop;
                 }
             }
-            println!("looking up {var}");
             ret += &get_variable(var, state).unwrap_or_default();
         } else {
             ret.push(c);
