@@ -67,7 +67,7 @@ pub fn is_delimiter(c: char) -> bool {
     delimiter_set.contains(&c)
 }
 
-pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
+pub fn tokens(st: &str, in_quoted_string: bool) -> Result<Vec<Token>, String> {
     let mut tokens: Vec<Token> = Vec::new();
     let mut current;
     let token_map: HashMap<&str, ShTokenType> = HashMap::from([
@@ -149,7 +149,12 @@ pub fn tokens(st: &str) -> Result<Vec<Token>, String> {
                 token_type: ShTokenType::WhiteSpace,
             },
             '\\' => {
-                if let Some(cc) = it.next() {
+                if in_quoted_string {
+                    Token {
+                        lexeme: String::from("\\"),
+                        token_type: ShTokenType::Name,
+                    }
+                } else if let Some(cc) = it.next() {
                     match cc {
                         '\n' | ' ' => {
                             continue;
@@ -385,7 +390,7 @@ mod tests {
     #[test]
     fn basic_tokens() {
         let reference_string = "| || > >> < [ [[ ] ]] &&&~${}@*";
-        let toks = tokens(reference_string).unwrap();
+        let toks = tokens(reference_string, false).unwrap();
         let good_graces = [
             Token {
                 lexeme: String::from("|"),
@@ -498,7 +503,7 @@ mod tests {
     #[test]
     fn wordy_tokes() {
         let reference_string = "if elif else fi while";
-        let toks = tokens(reference_string).unwrap();
+        let toks = tokens(reference_string, false).unwrap();
         let good_graces = [
             Token {
                 lexeme: String::from("if"),
@@ -543,7 +548,7 @@ mod tests {
     #[test]
     fn words_adjacent_to_singles() {
         let reference_string = "if|while{ elif";
-        let toks = tokens(reference_string).unwrap();
+        let toks = tokens(reference_string, false).unwrap();
         let good_graces = [
             Token {
                 lexeme: String::from("if"),

@@ -772,24 +772,18 @@ impl Argument {
 }
 
 fn evaluate_string(string: &str, state: &Rc<RefCell<State>>) -> Option<String> {
-    let mut ret = String::default();
-    let mut chars = string.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '$' {
-            let mut var = String::default();
-            'varloop: while let Some(v) = chars.peek() {
-                if *v != ' ' && *v != '$' {
-                    var.push(*v);
-                    chars.next();
-                } else {
-                    break 'varloop;
-                }
-            }
-            ret += &get_variable(var, state).unwrap_or_default();
-        } else {
-            ret.push(c);
+    let mut parser = Parser::new(state.clone());
+    let ret = match parser.parse_double_quoted_string(string) {
+        Ok(args) => args
+            .into_iter()
+            .map(|a| a.eval(state))
+            .reduce(|whole, next| whole + &next)
+            .unwrap(),
+        Err(e) => {
+            println!("Slush Error {e}");
+            String::default()
         }
-    }
+    };
     Some(ret)
 }
 

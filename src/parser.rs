@@ -36,7 +36,7 @@ impl Parser {
 
     pub fn parse(&mut self, line: &str) {
         self.err = "".to_string();
-        self.token = match tokens(line) {
+        self.token = match tokens(line, false) {
             Ok(t) => t,
             Err(e) => {
                 self.err += &e;
@@ -53,6 +53,31 @@ impl Parser {
             };
             self.try_consume(ShTokenType::NewLine);
         }
+    }
+
+    pub fn parse_double_quoted_string(&mut self, line: &str) -> Result<Vec<Argument>, String> {
+        self.err = "".to_string();
+        self.token = match tokens(line, true) {
+            Ok(t) => t,
+            Err(e) => {
+                self.err += &e;
+                Vec::new()
+            }
+        };
+
+        let mut stringies: Vec<Argument> = Vec::new();
+        while !self.current_is(ShTokenType::EndOfFile) {
+            let a = if self.current_is(ShTokenType::WhiteSpace) {
+                let r = Argument::Name(self.current().lexeme.clone());
+                self.next_token();
+                r
+            } else {
+                self.parse_double_argument()?
+                    .unwrap_or_else(|| Argument::Name(String::default()))
+            };
+            stringies.push(a);
+        }
+        Ok(stringies)
     }
 
     // the results are a left-associative no precedence
@@ -465,6 +490,26 @@ impl Parser {
         Ok(argument)
     }
 
+    fn parse_variable_name(&mut self) -> Result<Option<Argument>, String> {
+        match self.current().token_type {
+            ShTokenType::Name => Ok(Some(Argument::Variable(VariableLookup {
+                name: self.consume_current().lexeme.clone(),
+            }))),
+            ShTokenType::LeftParen => Ok(Some(Argument::SubShell(SubShellExpr {
+                shell: self.collect_matching(ShTokenType::LeftParen, ShTokenType::RightParen)?,
+            }))),
+            ShTokenType::LeftBrace => Ok(Some(Argument::Expansion(self.parse_expansion()?))),
+            ShTokenType::DollarSign
+            | ShTokenType::Bang
+            | ShTokenType::Star
+            | ShTokenType::Pound
+            | ShTokenType::AtSign => Ok(Some(Argument::Variable(VariableLookup {
+                name: self.consume_current().lexeme.clone(),
+            }))),
+            _ => Err("Expected some value after '$'".to_string()),
+        }
+    }
+
     // helper function for parse_argument that gets exactly one 'primitive' argument
     // which may be strung together to create
     fn _parse_argument(&mut self) -> Result<Option<Argument>, String> {
@@ -472,26 +517,7 @@ impl Parser {
             ShTokenType::Name => Ok(Some(Argument::Name(self.consume_current().lexeme.clone()))),
             ShTokenType::DollarSign => {
                 self.consume(ShTokenType::DollarSign)?;
-                match self.current().token_type {
-                    ShTokenType::Name => Ok(Some(Argument::Variable(VariableLookup {
-                        name: self.consume_current().lexeme.clone(),
-                    }))),
-                    ShTokenType::LeftParen => Ok(Some(Argument::SubShell(SubShellExpr {
-                        shell: self
-                            .collect_matching(ShTokenType::LeftParen, ShTokenType::RightParen)?,
-                    }))),
-                    ShTokenType::LeftBrace => {
-                        Ok(Some(Argument::Expansion(self.parse_expansion()?)))
-                    }
-                    ShTokenType::DollarSign
-                    | ShTokenType::Bang
-                    | ShTokenType::Star
-                    | ShTokenType::Pound
-                    | ShTokenType::AtSign => Ok(Some(Argument::Variable(VariableLookup {
-                        name: self.consume_current().lexeme.clone(),
-                    }))),
-                    _ => Err("Expected some value after '$'".to_string()),
-                }
+                self.parse_variable_name()
             }
 
             ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
@@ -518,6 +544,41 @@ impl Parser {
         }
     }
 
+    pub fn parse_double_argument(&mut self) -> Result<Option<Argument>, String> {
+        let mut argument: Option<Argument> = None;
+        while let Some(a) = self._parse_double_argument()? {
+            // while we still have tokens in the assignment we need
+            // to construct it at run time by creating MergeExprss
+            // of the various types of arguments strung together.
+            if argument.is_some() {
+                let l = argument.take().unwrap();
+                argument = Some(Argument::Merge(MergeExpr {
+                    left: Box::new(l),
+                    right: Box::new(a),
+                }));
+            } else {
+                argument = Some(a);
+            }
+        }
+        Ok(argument)
+    }
+
+    // helper function for parse_argument that gets exactly one 'primitive' argument
+    // which may be strung together to create
+    fn _parse_double_argument(&mut self) -> Result<Option<Argument>, String> {
+        match self.current().token_type {
+            ShTokenType::Name => Ok(Some(Argument::Name(self.consume_current().lexeme.clone()))),
+            ShTokenType::DollarSign => {
+                self.consume(ShTokenType::DollarSign)?;
+                self.parse_variable_name()
+            }
+            ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
+                shell: self.consume_current().lexeme.clone(),
+            }))),
+            ShTokenType::EndOfFile => Ok(None),
+            _ => Ok(Some(Argument::Name(self.consume_current().lexeme.clone()))),
+        }
+    }
     fn skip_whitespace(&mut self) {
         while self.current_is(ShTokenType::WhiteSpace) {
             self.next_token();

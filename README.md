@@ -18,7 +18,7 @@ is a list of objectives for the near term. The to-do list is always growing as I
   - [ ] Tilde Expansion
   - [ ] Pathname Expansion
 - [x] Basic single quote strings
-- [ ] Double quote strings with substitutions
+- [X] Double quote strings with substitutions
 - [x] [File redirects](https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_07)
 - [x] Redirect input with `<`
 - [ ] Explicit file descriptor redirects
