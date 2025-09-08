@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::{PipeReader, PipeWriter, Read, Write};
 use std::process;
 use std::process::Stdio;
 use std::process::{Command, ExitStatus};
@@ -40,7 +40,11 @@ impl State {
                     BuiltIn {
                         name: "cd".to_string(),
                         command: Rc::new(
-                            |args: &Vec<Argument>, state: Rc<RefCell<State>>| -> i32 {
+                            |args: &Vec<Argument>,
+                             state: Rc<RefCell<State>>,
+                             _stdin: &Option<PipeReader>,
+                             _stdout: &Option<PipeWriter>|
+                             -> i32 {
                                 change_dir::ChangeDir::new(&args[0].eval(&state)).eval()
                             },
                         ),
@@ -51,7 +55,11 @@ impl State {
                     BuiltIn {
                         name: "jobs".to_string(),
                         command: Rc::new(
-                            |args: &Vec<Argument>, state: Rc<RefCell<State>>| -> i32 {
+                            |args: &Vec<Argument>,
+                             state: Rc<RefCell<State>>,
+                             _stdin: &Option<PipeReader>,
+                             _stdout: &Option<PipeWriter>|
+                             -> i32 {
                                 let opt = args.first().and_then(|arg| match arg {
                                     Argument::Name(arg) => Some(arg.as_str()),
                                     _ => None,
@@ -66,14 +74,26 @@ impl State {
                     "true".to_string(),
                     BuiltIn {
                         name: "true".to_string(),
-                        command: Rc::new(|_: &Vec<Argument>, _: Rc<RefCell<State>>| -> i32 { 0 }),
+                        command: Rc::new(
+                            |_: &Vec<Argument>,
+                             _: Rc<RefCell<State>>,
+                             _: &Option<PipeReader>,
+                             _: &Option<PipeWriter>|
+                             -> i32 { 0 },
+                        ),
                     },
                 ),
                 (
                     "false".to_string(),
                     BuiltIn {
                         name: "true".to_string(),
-                        command: Rc::new(|_: &Vec<Argument>, _: Rc<RefCell<State>>| -> i32 { 1 }),
+                        command: Rc::new(
+                            |_: &Vec<Argument>,
+                             _: Rc<RefCell<State>>,
+                             _: &Option<PipeReader>,
+                             _: &Option<PipeWriter>|
+                             -> i32 { 1 },
+                        ),
                     },
                 ),
                 (
@@ -81,7 +101,11 @@ impl State {
                     BuiltIn {
                         name: "astview".to_string(),
                         command: Rc::new(
-                            |args: &Vec<Argument>, state: Rc<RefCell<State>>| -> i32 {
+                            |args: &Vec<Argument>,
+                             state: Rc<RefCell<State>>,
+                             _: &Option<PipeReader>,
+                             _: &Option<PipeWriter>|
+                             -> i32 {
                                 let mut parser = Parser::new(state.clone());
                                 parser.parse(&args[0].eval(&state));
                                 println!("{:#?}", parser.exprs);
@@ -94,19 +118,25 @@ impl State {
                     "help".to_string(),
                     BuiltIn {
                         name: "help".to_string(),
-                        command: Rc::new(|_: &Vec<Argument>, _: Rc<RefCell<State>>| -> i32 {
-                            println!("slush: A shell you can drink!");
-                            println!("\nBuiltins:");
-                            println!("  cd <dir> - change directory");
-                            println!("  exit [code] - exit the shell, optionally with a code");
-                            println!(
-                            "  astview '<command>' - view the abstract syntax tree of a command"
-                        );
-                            println!("  true - return 0");
-                            println!("  false - return 1");
-                            println!("  help - print this message");
-                            0
-                        }),
+                        command: Rc::new(
+                            |_: &Vec<Argument>,
+                             _: Rc<RefCell<State>>,
+                             _: &Option<PipeReader>,
+                             _: &Option<PipeWriter>|
+                             -> i32 {
+                                println!("slush: A shell you can drink!");
+                                println!("\nBuiltins:");
+                                println!("  cd <dir> - change directory");
+                                println!("  exit [code] - exit the shell, optionally with a code");
+                                println!(
+                                    "  astview '<command>' - view the abstract syntax tree of a command"
+                                );
+                                println!("  true - return 0");
+                                println!("  false - return 1");
+                                println!("  help - print this message");
+                                0
+                            },
+                        ),
                     },
                 ),
                 (
@@ -114,7 +144,11 @@ impl State {
                     BuiltIn {
                         name: "exit".to_string(),
                         command: Rc::new(
-                            |args: &Vec<Argument>, state: Rc<RefCell<State>>| -> i32 {
+                            |args: &Vec<Argument>,
+                             state: Rc<RefCell<State>>,
+                             _: &Option<PipeReader>,
+                             _: &Option<PipeWriter>|
+                             -> i32 {
                                 if !args.is_empty() {
                                     std::process::exit(
                                         args[0].eval(&state).parse().unwrap_or_default(),
@@ -271,7 +305,9 @@ impl ForExpr {
     pub fn eval(&mut self, state: &Rc<RefCell<State>>) -> Result<i32, String> {
         let mut ret = 0;
         for arg in &self.list {
-            env::set_var(&self.name, arg.eval(state));
+            unsafe {
+                env::set_var(&self.name, arg.eval(state));
+            }
             for command in &mut self.commands {
                 ret = command.eval()?;
             }
@@ -398,8 +434,7 @@ impl SubShellExpr {
             expr.set_output_capture(shell_output.clone());
             let _ = expr.eval();
         }
-        let x = shell_output.borrow().clone();
-        x
+        shell_output.borrow().clone()
     }
 }
 
@@ -438,7 +473,8 @@ impl CommandStr {
     }
 }
 
-type BuiltInEval = Rc<dyn Fn(&Vec<Argument>, Rc<RefCell<State>>) -> i32>;
+type BuiltInEval =
+    Rc<dyn Fn(&Vec<Argument>, Rc<RefCell<State>>, &Option<PipeReader>, &Option<PipeWriter>) -> i32>;
 pub struct BuiltIn {
     name: String,
     command: BuiltInEval,
@@ -460,10 +496,30 @@ impl Debug for BuiltIn {
 }
 
 #[derive(Debug, Clone)]
-enum SlushJob {
+enum SlushJobType {
     Builtin(BuiltIn, Rc<Vec<Argument>>),
     Function(String, Rc<Vec<Argument>>),
     Child(Arc<SharedChild>),
+}
+
+struct SlushJob {
+    jobtype: SlushJobType,
+    stdin: Option<PipeReader>,
+    stdout: Option<PipeWriter>, // TODO: fucking figure out a lifetime
+}
+
+impl SlushJob {
+    fn new(
+        jobtype: SlushJobType,
+        stdin: Option<PipeReader>,
+        stdout: Option<PipeWriter>,
+    ) -> SlushJob {
+        Self {
+            jobtype,
+            stdin,
+            stdout,
+        }
+    }
 }
 
 impl PipeLineExpr {
@@ -481,21 +537,29 @@ impl PipeLineExpr {
                         ass.eval(&self.state.clone());
                     }
 
-                    if let Argument::Name(arg) = &exp.command {
-                        if arg.is_empty() {
-                            continue;
-                        }
+                    if let Argument::Name(arg) = &exp.command
+                        && arg.is_empty()
+                    {
+                        continue;
                     }
 
                     let base_command = exp.command.eval(&self.state.clone());
 
                     if let Some(command) = self.state.borrow().built_ins.get(&base_command) {
-                        jobs.push(SlushJob::Builtin(command.clone(), exp.arguments.clone()));
+                        jobs.push(SlushJob::new(
+                            SlushJobType::Builtin(command.clone(), exp.arguments.clone()),
+                            None,
+                            None,
+                        ));
                         continue;
                     }
 
                     if self.state.borrow().functions.contains_key(&base_command) {
-                        jobs.push(SlushJob::Function(base_command, exp.arguments.clone()));
+                        jobs.push(SlushJob::new(
+                            SlushJobType::Function(base_command, exp.arguments.clone()),
+                            None,
+                            None,
+                        ));
                         continue;
                     }
 
@@ -505,9 +569,15 @@ impl PipeLineExpr {
                     let mut state = self.state.borrow_mut();
 
                     if let Some(job) = jobs.last_mut() {
-                        match job {
-                            SlushJob::Builtin(_, _) | SlushJob::Function(_, _) => None,
-                            SlushJob::Child(pchild) => {
+                        match &job.jobtype {
+                            SlushJobType::Function(_, _) => None,
+                            SlushJobType::Builtin(_, _) => {
+                                if let Some(stdout) = &job.stdout {
+                                    cmd.stdin(stdout.try_clone().expect("Couldn't clone pipe"));
+                                }
+                                Some(())
+                            }
+                            SlushJobType::Child(pchild) => {
                                 {
                                     cmd.stdin(pchild.take_stdout().unwrap());
                                 }
@@ -515,10 +585,10 @@ impl PipeLineExpr {
                             }
                         };
                     };
-                    if let Some(file_redirect) = &self.file_redirect {
-                        if file_redirect.mode == RedirectType::In {
-                            cmd.stdin(Stdio::piped());
-                        }
+                    if let Some(file_redirect) = &self.file_redirect
+                        && file_redirect.mode == RedirectType::In
+                    {
+                        cmd.stdin(Stdio::piped());
                     }
 
                     if i < sz - 1
@@ -531,7 +601,7 @@ impl PipeLineExpr {
 
                     jobs.push(match cmd.spawn() {
                         Ok(c) => match SharedChild::new(c) {
-                            Ok(sc) => SlushJob::Child(Arc::new(sc)),
+                            Ok(sc) => SlushJob::new(SlushJobType::Child(Arc::new(sc)), None, None),
                             Err(v) => {
                                 return Err(format!(
                                     "Error creating shared child {}: {}",
@@ -549,7 +619,7 @@ impl PipeLineExpr {
                         }
                     });
 
-                    if let SlushJob::Child(child) = jobs.last_mut().as_ref().unwrap() {
+                    if let SlushJobType::Child(child) = &jobs.last_mut().as_ref().unwrap().jobtype {
                         let job = Job {
                             pid: child.id(),
                             child: child.clone(),
@@ -573,7 +643,9 @@ impl PipeLineExpr {
         let jobs = self.assemble_pipeline()?;
 
         let mut prev_child: Option<Arc<SharedChild>> = None;
-        if let Some(SlushJob::Child(child)) = jobs.last() {
+        if let Some(job) = jobs.last()
+            && let SlushJobType::Child(child) = &job.jobtype
+        {
             prev_child = Some(child.clone());
         }
         let mut exit_status: i32 = 0;
@@ -646,8 +718,8 @@ impl PipeLineExpr {
                 let _ = file.write_all(&outie.stdout.clone());
             }
         } else if let Some(job) = jobs.last() {
-            match job {
-                SlushJob::Child(child) => {
+            match &job.jobtype {
+                SlushJobType::Child(child) => {
                     if !self.background {
                         let status = child.wait().unwrap();
                         exit_status = status.code().unwrap_or(130);
@@ -655,10 +727,11 @@ impl PipeLineExpr {
                         exit_status = 0;
                     }
                 }
-                SlushJob::Builtin(builtin, args) => {
-                    exit_status = (builtin.command)(args, self.state.clone());
+                SlushJobType::Builtin(builtin, args) => {
+                    exit_status =
+                        (builtin.command)(args, self.state.clone(), &job.stdin, &job.stdout);
                 }
-                SlushJob::Function(function, args) => {
+                SlushJobType::Function(function, args) => {
                     let argstack = self.state.borrow().argstack.clone();
                     let aa = args
                         .iter()
@@ -837,11 +910,7 @@ fn get_variable(var: String, state: &Rc<RefCell<State>>) -> Option<String> {
                 })
             } else {
                 let text = env::var(var).unwrap_or_default();
-                if text.is_empty() {
-                    None
-                } else {
-                    Some(text)
-                }
+                if text.is_empty() { None } else { Some(text) }
             }
         }
     }

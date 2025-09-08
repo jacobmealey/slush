@@ -32,16 +32,18 @@ pub struct ChangeDir {
 }
 impl ChangeDir {
     pub fn eval(&self) -> i32 {
-        env::set_var(
-            "PWD",
-            normalize_path(&String::from(
-                Path::new(&env::var("PWD").unwrap_or("".to_string()))
-                    .join(&self.path)
-                    .as_os_str()
-                    .to_str()
-                    .unwrap_or(""),
-            )),
-        );
+        unsafe {
+            env::set_var(
+                "PWD",
+                normalize_path(&String::from(
+                    Path::new(&env::var("PWD").unwrap_or("".to_string()))
+                        .join(&self.path)
+                        .as_os_str()
+                        .to_str()
+                        .unwrap_or(""),
+                )),
+            );
+        }
         match env::set_current_dir(&self.path) {
             Ok(()) => 0,
             Err(_) => 1,

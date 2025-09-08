@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::LazyLock;
 
-use crate::tokenizer::{tokens, ShTokenType, Token};
+use crate::tokenizer::{ShTokenType, Token, tokens};
 
 static ENDOFFILE: LazyLock<Token> = LazyLock::new(|| Token {
     lexeme: "".to_string(),
@@ -127,12 +127,11 @@ impl Parser {
         while self.try_consume(ShTokenType::Pipe) {
             self.skip_whitespace();
             let cmd = match self.current().token_type {
-                ShTokenType::If | ShTokenType::While | ShTokenType::Until | ShTokenType::For => {
-                    return Err(
-                        "Internal Error: Slush does not support control flow in a pipeline\n"
-                            .to_string(),
-                    );
+                ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
+                ShTokenType::While | ShTokenType::Until => {
+                    CompoundList::Whileexpr(self.parse_while()?)
                 }
+                ShTokenType::For => CompoundList::Forexpr(self.parse_for()?),
                 _ => CompoundList::Commandexpr(self.parse_command()?),
             };
             pipeline.push(cmd);
@@ -450,7 +449,7 @@ impl Parser {
                 return Err(format!(
                     "Syntax error: Expected a file name after '{:?}'",
                     self.current()
-                ))
+                ));
             }
         };
         Ok(Some(RedirectExpr {
