@@ -1,20 +1,20 @@
 pub mod change_dir;
 use crate::parser::Parser;
+use nix::libc;
 use shared_child::SharedChild;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
-use std::io::{PipeReader, PipeWriter, pipe, Read, Write};
+use std::io::{PipeReader, PipeWriter, Read, Write, pipe};
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::process;
 use std::process::Stdio;
 use std::process::{Command, ExitStatus};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::{env, io};
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
-use nix::libc;
 
 pub type FunctionStack = Rc<RefCell<Vec<Rc<Vec<Argument>>>>>; // ??
 
@@ -117,11 +117,11 @@ impl State {
                              _: &mut Option<Box<dyn Read>>,
                              out: &mut Option<Box<dyn Write>>|
                              -> i32 {
-                                 if let Some(writer) = out {
+                                if let Some(writer) = out {
                                     let mut parser = Parser::new(state.clone());
                                     parser.parse(&args[0].eval(&state));
                                     slushwrite!(writer, "{:#?}", parser.exprs);
-                                 }
+                                }
                                 0
                             },
                         ),
@@ -145,8 +145,10 @@ impl State {
                                         writer,
                                         "  exit [code] - exit the shell, optionally with a code"
                                     );
-                                    slushwrite!(writer, "  astview '<command>' - view the abstract syntax tree of a command"
-                                );
+                                    slushwrite!(
+                                        writer,
+                                        "  astview '<command>' - view the abstract syntax tree of a command"
+                                    );
                                     slushwrite!(writer, "  true - return 0");
                                     slushwrite!(writer, "  false - return 1");
                                     slushwrite!(writer, "  help - print this message");
@@ -165,29 +167,30 @@ impl State {
                              state: Rc<RefCell<State>>,
                              stdin: &mut Option<Box<dyn Read>>,
                              _: &mut Option<Box<dyn Write>>|
-                            -> i32 {
-                                 if let Some(stdin) = stdin {
-                                     let mut buffer = [0; 1];
-                                     let mut var = String::default();
-                                     while let Ok(count) = stdin.read(&mut buffer)
-                                         && count == 1
-                                         && buffer[0] as char != '\n' {
-                                             var.push(buffer[0] as char);
-                                         }
-                                     println!("read: {var}");
-                                     for arg in args {
-                                         unsafe {
+                             -> i32 {
+                                if let Some(stdin) = stdin {
+                                    let mut buffer = [0; 1];
+                                    let mut var = String::default();
+                                    while let Ok(count) = stdin.read(&mut buffer)
+                                        && count == 1
+                                        && buffer[0] as char != '\n'
+                                    {
+                                        var.push(buffer[0] as char);
+                                    }
+                                    println!("read: {var}");
+                                    for arg in args {
+                                        unsafe {
                                             std::env::set_var(arg.eval(&state), &var);
-                                         }
-                                     }
-                                     0
-                                 } else {
-                                     println!("Nothing to see.");
-                                     1
-                                 }
-                             },
-                        )
-                    }
+                                        }
+                                    }
+                                    0
+                                } else {
+                                    println!("Nothing to see.");
+                                    1
+                                }
+                            },
+                        ),
+                    },
                 ),
                 (
                     "exit".to_string(),
@@ -214,8 +217,6 @@ impl State {
         }))
     }
 }
-
-
 
 // sort of a hack to always assume all states are the same ? seems JANK
 impl PartialEq for State {
@@ -588,10 +589,8 @@ impl PipeLineExpr {
         let sz = self.pipeline.len();
         for _ in 0..sz {
             pipes.push(match pipe() {
-                Ok((reader, writer)) => {
-                    (reader, writer)
-                },
-                Err(e) => return Err(format!("Error creating pipe for pipeline: {e}"))
+                Ok((reader, writer)) => (reader, writer),
+                Err(e) => return Err(format!("Error creating pipe for pipeline: {e}")),
             });
         }
         for (i, expr) in self.pipeline.iter_mut().enumerate() {
@@ -623,7 +622,7 @@ impl PipeLineExpr {
                     } else if self.capture_out.is_some() {
                         output_pipe = match pipe() {
                             Ok((_, out)) => Some(out),
-                            Err(e) => {return Err(format!("Error creating pipe: {e}"))}
+                            Err(e) => return Err(format!("Error creating pipe: {e}")),
                         }
                     } else {
                         let p = io::stdout().as_raw_fd();
@@ -659,12 +658,12 @@ impl PipeLineExpr {
                     if (input_pipe.is_some()
                         || (self.file_redirect.is_some()
                             && self.file_redirect.as_ref().unwrap().mode == RedirectType::In))
-                            && let Some(input) = &input_pipe {
-                                cmd.stdin(input.try_clone().unwrap());
-                            }
-
-                    if let Some(out) = &output_pipe
+                        && let Some(input) = &input_pipe
                     {
+                        cmd.stdin(input.try_clone().unwrap());
+                    }
+
+                    if let Some(out) = &output_pipe {
                         cmd.stdout(out.try_clone().unwrap());
                     }
                     // we reset this above when we're capturing output... it wasn't
@@ -673,18 +672,14 @@ impl PipeLineExpr {
                         cmd.stdout(Stdio::piped());
                     }
                     jobs.push(match cmd.spawn() {
-                        Ok(c) => {
-                            match SharedChild::new(c) {
-                            Ok(sc) => {
-                                SlushJob::new(SlushJobType::Child(Arc::new(sc)), None, None)
-                            },
+                        Ok(c) => match SharedChild::new(c) {
+                            Ok(sc) => SlushJob::new(SlushJobType::Child(Arc::new(sc)), None, None),
                             Err(v) => {
                                 return Err(format!(
                                     "Error creating shared child {}: {}",
                                     exp.command.eval(&self.state),
                                     v
                                 ));
-                            }
                             }
                         },
                         Err(v) => {
@@ -1098,7 +1093,6 @@ impl Display for Status {
         }
     }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct Job {
