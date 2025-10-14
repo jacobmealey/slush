@@ -6,13 +6,15 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
-use std::io::{PipeReader, PipeWriter, Read, Write};
+use std::io::{PipeReader, PipeWriter, pipe, Read, Write};
 use std::process;
 use std::process::Stdio;
 use std::process::{Command, ExitStatus};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::{env, io};
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use nix::libc;
 
 pub type FunctionStack = Rc<RefCell<Vec<Rc<Vec<Argument>>>>>; // ??
 
@@ -23,6 +25,15 @@ pub struct State {
     pub built_ins: HashMap<String, BuiltIn>,
     pub functions: HashMap<String, Rc<RefCell<Vec<PipeLineExpr>>>>,
     pub argstack: FunctionStack,
+}
+
+macro_rules! slushwrite {
+    ($writer:expr, $fmt:expr, $($arg:tt)*) => {
+        writeln!($writer, $fmt, $($arg)*).expect("BuiltIn unable to write");
+    };
+    ($writer:expr, $fmt:expr) => {
+        writeln!($writer, $fmt).expect("BuiltIn unable to write")
+    };
 }
 
 impl State {
@@ -42,8 +53,8 @@ impl State {
                         command: Rc::new(
                             |args: &Vec<Argument>,
                              state: Rc<RefCell<State>>,
-                             _stdin: &Option<PipeReader>,
-                             _stdout: &Option<PipeWriter>|
+                             _: &mut Option<Box<dyn Read>>,
+                             _: &mut Option<Box<dyn Write>>|
                              -> i32 {
                                 change_dir::ChangeDir::new(&args[0].eval(&state)).eval()
                             },
@@ -57,8 +68,8 @@ impl State {
                         command: Rc::new(
                             |args: &Vec<Argument>,
                              state: Rc<RefCell<State>>,
-                             _stdin: &Option<PipeReader>,
-                             _stdout: &Option<PipeWriter>|
+                             _: &mut Option<Box<dyn Read>>,
+                             _: &mut Option<Box<dyn Write>>|
                              -> i32 {
                                 let opt = args.first().and_then(|arg| match arg {
                                     Argument::Name(arg) => Some(arg.as_str()),
@@ -77,8 +88,8 @@ impl State {
                         command: Rc::new(
                             |_: &Vec<Argument>,
                              _: Rc<RefCell<State>>,
-                             _: &Option<PipeReader>,
-                             _: &Option<PipeWriter>|
+                             _: &mut Option<Box<dyn Read>>,
+                             _: &mut Option<Box<dyn Write>>|
                              -> i32 { 0 },
                         ),
                     },
@@ -90,8 +101,8 @@ impl State {
                         command: Rc::new(
                             |_: &Vec<Argument>,
                              _: Rc<RefCell<State>>,
-                             _: &Option<PipeReader>,
-                             _: &Option<PipeWriter>|
+                             _: &mut Option<Box<dyn Read>>,
+                             _: &mut Option<Box<dyn Write>>|
                              -> i32 { 1 },
                         ),
                     },
@@ -103,12 +114,14 @@ impl State {
                         command: Rc::new(
                             |args: &Vec<Argument>,
                              state: Rc<RefCell<State>>,
-                             _: &Option<PipeReader>,
-                             _: &Option<PipeWriter>|
+                             _: &mut Option<Box<dyn Read>>,
+                             out: &mut Option<Box<dyn Write>>|
                              -> i32 {
-                                let mut parser = Parser::new(state.clone());
-                                parser.parse(&args[0].eval(&state));
-                                println!("{:#?}", parser.exprs);
+                                 if let Some(writer) = out {
+                                    let mut parser = Parser::new(state.clone());
+                                    parser.parse(&args[0].eval(&state));
+                                    slushwrite!(writer, "{:#?}", parser.exprs);
+                                 }
                                 0
                             },
                         ),
@@ -121,23 +134,60 @@ impl State {
                         command: Rc::new(
                             |_: &Vec<Argument>,
                              _: Rc<RefCell<State>>,
-                             _: &Option<PipeReader>,
-                             _: &Option<PipeWriter>|
+                             _: &mut Option<Box<dyn Read>>,
+                             out: &mut Option<Box<dyn Write>>|
                              -> i32 {
-                                println!("slush: A shell you can drink!");
-                                println!("\nBuiltins:");
-                                println!("  cd <dir> - change directory");
-                                println!("  exit [code] - exit the shell, optionally with a code");
-                                println!(
-                                    "  astview '<command>' - view the abstract syntax tree of a command"
+                                if let Some(writer) = out {
+                                    slushwrite!(writer, "slush: A shell you can drink!");
+                                    slushwrite!(writer, "\nBuiltins:");
+                                    slushwrite!(writer, "  cd <dir> - change directory");
+                                    slushwrite!(
+                                        writer,
+                                        "  exit [code] - exit the shell, optionally with a code"
+                                    );
+                                    slushwrite!(writer, "  astview '<command>' - view the abstract syntax tree of a command"
                                 );
-                                println!("  true - return 0");
-                                println!("  false - return 1");
-                                println!("  help - print this message");
+                                    slushwrite!(writer, "  true - return 0");
+                                    slushwrite!(writer, "  false - return 1");
+                                    slushwrite!(writer, "  help - print this message");
+                                };
                                 0
                             },
                         ),
                     },
+                ),
+                (
+                    "read".to_string(),
+                    BuiltIn {
+                        name: "read".to_string(),
+                        command: Rc::new(
+                            |args: &Vec<Argument>,
+                             state: Rc<RefCell<State>>,
+                             stdin: &mut Option<Box<dyn Read>>,
+                             _: &mut Option<Box<dyn Write>>|
+                            -> i32 {
+                                 if let Some(stdin) = stdin {
+                                     let mut buffer = [0; 1];
+                                     let mut var = String::default();
+                                     while let Ok(count) = stdin.read(&mut buffer)
+                                         && count == 1
+                                         && buffer[0] as char != '\n' {
+                                             var.push(buffer[0] as char);
+                                         }
+                                     println!("read: {var}");
+                                     for arg in args {
+                                         unsafe {
+                                            std::env::set_var(arg.eval(&state), &var);
+                                         }
+                                     }
+                                     0
+                                 } else {
+                                     println!("Nothing to see.");
+                                     1
+                                 }
+                             },
+                        )
+                    }
                 ),
                 (
                     "exit".to_string(),
@@ -146,8 +196,8 @@ impl State {
                         command: Rc::new(
                             |args: &Vec<Argument>,
                              state: Rc<RefCell<State>>,
-                             _: &Option<PipeReader>,
-                             _: &Option<PipeWriter>|
+                             _: &mut Option<Box<dyn Read>>,
+                             _: &mut Option<Box<dyn Write>>|
                              -> i32 {
                                 if !args.is_empty() {
                                     std::process::exit(
@@ -164,6 +214,8 @@ impl State {
         }))
     }
 }
+
+
 
 // sort of a hack to always assume all states are the same ? seems JANK
 impl PartialEq for State {
@@ -473,8 +525,14 @@ impl CommandStr {
     }
 }
 
-type BuiltInEval =
-    Rc<dyn Fn(&Vec<Argument>, Rc<RefCell<State>>, &Option<PipeReader>, &Option<PipeWriter>) -> i32>;
+type BuiltInEval = Rc<
+    dyn Fn(
+        &Vec<Argument>,
+        Rc<RefCell<State>>,
+        &mut Option<Box<dyn Read>>,
+        &mut Option<Box<dyn Write>>,
+    ) -> i32,
+>;
 pub struct BuiltIn {
     name: String,
     command: BuiltInEval,
@@ -502,6 +560,7 @@ enum SlushJobType {
     Child(Arc<SharedChild>),
 }
 
+#[derive(Debug)]
 struct SlushJob {
     jobtype: SlushJobType,
     stdin: Option<PipeReader>,
@@ -525,7 +584,16 @@ impl SlushJob {
 impl PipeLineExpr {
     fn assemble_pipeline(&mut self) -> Result<Vec<SlushJob>, String> {
         let mut jobs: Vec<SlushJob> = Vec::new();
+        let mut pipes: Vec<(PipeReader, PipeWriter)> = Vec::new();
         let sz = self.pipeline.len();
+        for _ in 0..sz {
+            pipes.push(match pipe() {
+                Ok((reader, writer)) => {
+                    (reader, writer)
+                },
+                Err(e) => return Err(format!("Error creating pipe for pipeline: {e}"))
+            });
+        }
         for (i, expr) in self.pipeline.iter_mut().enumerate() {
             match expr {
                 CompoundList::Ifexpr(ifxpr) => ifxpr.eval()?,
@@ -544,12 +612,32 @@ impl PipeLineExpr {
                     }
 
                     let base_command = exp.command.eval(&self.state.clone());
+                    let mut input_pipe = None;
+                    if i > 0 {
+                        let (inp, _) = pipes.get(i).unwrap();
+                        input_pipe = Some(inp.try_clone().expect("Error cloning pipe"));
+                    }
+                    let output_pipe: Option<PipeWriter>;
+                    if let Some((_, outp)) = pipes.get(i + 1) {
+                        output_pipe = Some(outp.try_clone().expect("Error cloning pipe"));
+                    } else if self.capture_out.is_some() {
+                        output_pipe = match pipe() {
+                            Ok((_, out)) => Some(out),
+                            Err(e) => {return Err(format!("Error creating pipe: {e}"))}
+                        }
+                    } else {
+                        let p = io::stdout().as_raw_fd();
+                        unsafe {
+                            let dup_fd = libc::dup(p);
+                            output_pipe = Some(PipeWriter::from(OwnedFd::from_raw_fd(dup_fd)));
+                        }
+                    }
 
                     if let Some(command) = self.state.borrow().built_ins.get(&base_command) {
                         jobs.push(SlushJob::new(
                             SlushJobType::Builtin(command.clone(), exp.arguments.clone()),
-                            None,
-                            None,
+                            input_pipe,
+                            output_pipe,
                         ));
                         continue;
                     }
@@ -568,46 +656,36 @@ impl PipeLineExpr {
 
                     let mut state = self.state.borrow_mut();
 
-                    if let Some(job) = jobs.last_mut() {
-                        match &job.jobtype {
-                            SlushJobType::Function(_, _) => None,
-                            SlushJobType::Builtin(_, _) => {
-                                if let Some(stdout) = &job.stdout {
-                                    cmd.stdin(stdout.try_clone().expect("Couldn't clone pipe"));
-                                }
-                                Some(())
+                    if input_pipe.is_some()
+                        || (self.file_redirect.is_some()
+                            && self.file_redirect.as_ref().unwrap().mode == RedirectType::In) {
+                            if let Some(input) = &input_pipe {
+                                cmd.stdin(input.try_clone().unwrap());
                             }
-                            SlushJobType::Child(pchild) => {
-                                {
-                                    cmd.stdin(pchild.take_stdout().unwrap());
-                                }
-                                Some(())
-                            }
-                        };
-                    };
-                    if let Some(file_redirect) = &self.file_redirect
-                        && file_redirect.mode == RedirectType::In
-                    {
-                        cmd.stdin(Stdio::piped());
                     }
 
-                    if i < sz - 1
-                        || self.capture_out.is_some()
-                        || (self.file_redirect.as_ref().is_some()
-                            && self.file_redirect.as_ref().unwrap().mode != RedirectType::In)
+                    if let Some(out) = &output_pipe
                     {
+                        cmd.stdout(out.try_clone().unwrap());
+                    }
+                    // we reset this above when we're capturing output... it wasn't
+                    // playing nice w/ the pipe systems
+                    if self.capture_out.is_some() {
                         cmd.stdout(Stdio::piped());
                     }
-
                     jobs.push(match cmd.spawn() {
-                        Ok(c) => match SharedChild::new(c) {
-                            Ok(sc) => SlushJob::new(SlushJobType::Child(Arc::new(sc)), None, None),
+                        Ok(c) => {
+                            match SharedChild::new(c) {
+                            Ok(sc) => {
+                                SlushJob::new(SlushJobType::Child(Arc::new(sc)), None, None)
+                            },
                             Err(v) => {
                                 return Err(format!(
                                     "Error creating shared child {}: {}",
                                     exp.command.eval(&self.state),
                                     v
                                 ));
+                            }
                             }
                         },
                         Err(v) => {
@@ -728,8 +806,20 @@ impl PipeLineExpr {
                     }
                 }
                 SlushJobType::Builtin(builtin, args) => {
-                    exit_status =
-                        (builtin.command)(args, self.state.clone(), &job.stdin, &job.stdout);
+                    let mut boxed_reader: Option<Box<dyn Read>> = job
+                        .stdin
+                        .as_ref()
+                        .map(|reader| Box::new(reader.try_clone().unwrap()) as Box<dyn Read>);
+                    let mut boxed_writer: Option<Box<dyn Write>> = job
+                        .stdout
+                        .as_ref()
+                        .map(|writer| Box::new(writer.try_clone().unwrap()) as Box<dyn Write>);
+                    exit_status = (builtin.command)(
+                        args,
+                        self.state.clone(),
+                        &mut boxed_reader,
+                        &mut boxed_writer,
+                    );
                 }
                 SlushJobType::Function(function, args) => {
                     let argstack = self.state.borrow().argstack.clone();
@@ -1009,6 +1099,7 @@ impl Display for Status {
         }
     }
 }
+
 
 #[derive(Debug, Clone)]
 pub struct Job {

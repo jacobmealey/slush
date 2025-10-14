@@ -29,6 +29,8 @@ fn repl() {
     panic::set_hook(Box::new(|panic_info| {
         println!("one or more internal error occurred while running slush.");
         println!("{panic_info}");
+        //let backtrace = Backtrace::capture();
+        //println!("{backtrace}");
         println!("Submit an issue (or a pull request!) here: https://github.com/jacobmealey/slush");
     }));
 
