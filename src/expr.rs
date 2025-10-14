@@ -656,13 +656,12 @@ impl PipeLineExpr {
 
                     let mut state = self.state.borrow_mut();
 
-                    if input_pipe.is_some()
+                    if (input_pipe.is_some()
                         || (self.file_redirect.is_some()
-                            && self.file_redirect.as_ref().unwrap().mode == RedirectType::In) {
-                            if let Some(input) = &input_pipe {
+                            && self.file_redirect.as_ref().unwrap().mode == RedirectType::In))
+                            && let Some(input) = &input_pipe {
                                 cmd.stdin(input.try_clone().unwrap());
                             }
-                    }
 
                     if let Some(out) = &output_pipe
                     {
