@@ -120,7 +120,11 @@ impl State {
                                 if let Some(writer) = out {
                                     let mut parser = Parser::new(state.clone());
                                     parser.parse(&args[0].eval(&state));
-                                    slushwrite!(writer, "{:#?}", parser.exprs);
+                                    if !parser.err.is_empty() {
+                                        slushwrite!(writer, "{}", parser.err);
+                                    } else {
+                                        slushwrite!(writer, "{:#?}", parser.exprs);
+                                    }
                                 }
                                 0
                             },
@@ -177,7 +181,6 @@ impl State {
                                     {
                                         var.push(buffer[0] as char);
                                     }
-                                    println!("read: {var}");
                                     for arg in args {
                                         unsafe {
                                             std::env::set_var(arg.eval(&state), &var);
@@ -185,7 +188,6 @@ impl State {
                                     }
                                     0
                                 } else {
-                                    println!("Nothing to see.");
                                     1
                                 }
                             },
@@ -391,6 +393,7 @@ pub enum CompoundList {
     Forexpr(ForExpr),
     Commandexpr(CommandExpr),
     Functionexpr(FunctionExpr),
+    CommandBlock(Vec<AndOrNode>),
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -451,10 +454,10 @@ pub struct AndIf {
 impl AndIf {
     fn eval(&mut self) -> Result<i32, String> {
         let ll = self.left.eval()?;
-        let rr = self.right.eval()?;
         if ll != 0 {
             return Ok(ll);
         }
+        let rr = self.right.eval()?;
         Ok(rr)
     }
 
@@ -478,6 +481,15 @@ pub struct SubShellExpr {
     pub shell: String,
 }
 
+impl AssignmentExpr {
+    fn eval(&mut self, state: &Rc<RefCell<State>>) -> i32 {
+        unsafe {
+            env::set_var(&self.key, self.val.eval(state));
+        }
+        0
+    }
+}
+
 impl SubShellExpr {
     pub fn stdout(&self) -> String {
         let mut parser = Parser::new(State::new());
@@ -488,15 +500,6 @@ impl SubShellExpr {
             let _ = expr.eval();
         }
         shell_output.borrow().clone()
-    }
-}
-
-impl AssignmentExpr {
-    fn eval(&mut self, state: &Rc<RefCell<State>>) -> i32 {
-        unsafe {
-            env::set_var(&self.key, self.val.eval(state));
-        }
-        0
     }
 }
 
@@ -599,6 +602,13 @@ impl PipeLineExpr {
                 CompoundList::Whileexpr(whlexpr) => whlexpr.eval()?,
                 CompoundList::Forexpr(forexpr) => forexpr.eval(&self.state.clone())?,
                 CompoundList::Functionexpr(func) => func.eval(&self.state.clone()),
+                CompoundList::CommandBlock(block) => {
+                    let mut ret = 0;
+                    for command in block {
+                        ret = command.eval()?;
+                    }
+                    ret
+                }
                 CompoundList::Commandexpr(exp) => {
                     if let Some(ref mut ass) = exp.assignment {
                         ass.eval(&self.state.clone());

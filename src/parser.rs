@@ -80,6 +80,17 @@ impl Parser {
         Ok(stringies)
     }
 
+    fn parse_block_command(&mut self) -> Result<Vec<AndOrNode>, String> {
+        self.consume(ShTokenType::LeftBrace)?;
+        let mut ret: Vec<AndOrNode> = vec![];
+        while !self.current_is(ShTokenType::RightBrace) {
+            ret.push(self.parse_andor_list()?);
+        }
+        self.consume(ShTokenType::RightBrace)?;
+
+        Ok(ret)
+    }
+
     // the results are a left-associative no precedence
     // list of and / or expressions.
     fn parse_andor_list(&mut self) -> Result<AndOrNode, String> {
@@ -113,6 +124,7 @@ impl Parser {
         self.skip_whitespace();
         let mut pipeline: Vec<CompoundList> = Vec::new();
         pipeline.push(match self.current().token_type {
+            ShTokenType::LeftBrace => CompoundList::CommandBlock(self.parse_block_command()?),
             ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
             ShTokenType::While | ShTokenType::Until => CompoundList::Whileexpr(self.parse_while()?),
             ShTokenType::For => CompoundList::Forexpr(self.parse_for()?),
@@ -127,6 +139,7 @@ impl Parser {
         while self.try_consume(ShTokenType::Pipe) {
             self.skip_whitespace();
             let cmd = match self.current().token_type {
+                ShTokenType::LeftBrace => CompoundList::CommandBlock(self.parse_block_command()?),
                 ShTokenType::If => CompoundList::Ifexpr(self.parse_if()?),
                 ShTokenType::While | ShTokenType::Until => {
                     CompoundList::Whileexpr(self.parse_while()?)
