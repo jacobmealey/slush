@@ -678,7 +678,7 @@ impl PipeLineExpr {
                     }
                     // we reset this above when we're capturing output... it wasn't
                     // playing nice w/ the pipe systems
-                    if self.capture_out.is_some() {
+                    if i == sz - 1 && self.capture_out.is_some() {
                         cmd.stdout(Stdio::piped());
                     }
                     jobs.push(match cmd.spawn() {

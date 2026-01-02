@@ -46,6 +46,7 @@ pub enum ShTokenType {
     Time,
     Name,
     DoubleQuoteStr,
+    SingleQuoteStr,
     BackTickStr,
     UseDefault,       // ${parameter:-[word]}}
     AssignDefault,    //${parameter:=[word]}}
@@ -57,6 +58,16 @@ pub enum ShTokenType {
 pub struct Token {
     pub lexeme: String,
     pub token_type: ShTokenType,
+}
+
+impl Token {
+    pub fn as_original(&self) -> String {
+        match self.token_type {
+            ShTokenType::DoubleQuoteStr => format!("\"{}\"", self.lexeme),
+            ShTokenType::SingleQuoteStr => format!("'{}'", self.lexeme),
+            _ => self.lexeme.clone(),
+        }
+    }
 }
 
 pub fn is_delimiter(c: char) -> bool {
@@ -185,7 +196,7 @@ pub fn tokens(st: &str, in_quoted_string: bool) -> Result<Vec<Token>, String> {
             },
             '\'' => Token {
                 lexeme: scan_until('\'', &mut it)?,
-                token_type: ShTokenType::Name,
+                token_type: ShTokenType::SingleQuoteStr,
             },
             '(' => Token {
                 lexeme: String::from(c),

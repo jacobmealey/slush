@@ -533,7 +533,7 @@ impl Parser {
             }
 
             ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
-                shell: self.consume_current().lexeme.clone(),
+                shell: self.consume_current().as_original(),
             }))),
             ShTokenType::DoubleQuoteStr => Ok(Some(Argument::QuoteString(
                 self.consume_current().lexeme.clone(),
@@ -585,7 +585,7 @@ impl Parser {
                 self.parse_variable_name()
             }
             ShTokenType::BackTickStr => Ok(Some(Argument::SubShell(SubShellExpr {
-                shell: self.consume_current().lexeme.clone(),
+                shell: self.consume_current().as_original(),
             }))),
             ShTokenType::EndOfFile => Ok(None),
             _ => Ok(Some(Argument::Name(self.consume_current().lexeme.clone()))),
@@ -626,7 +626,7 @@ impl Parser {
                 0
             };
             if count > 0 {
-                ret.push_str(&self.current().lexeme)
+                ret.push_str(&self.current().as_original())
             }
         }
         self.next_token();
@@ -933,7 +933,7 @@ mod test {
             pipeline: Vec::from([CompoundList::Commandexpr(CommandExpr {
                 command: Argument::Name("echo".to_string()),
                 arguments: Vec::from([Argument::SubShell(SubShellExpr {
-                    shell: "echo $(echo hello world)".to_string(),
+                    shell: "echo $(echo 'hello world')".to_string(),
                 })])
                 .into(),
                 assignment: None,
