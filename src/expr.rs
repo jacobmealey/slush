@@ -283,6 +283,7 @@ pub struct PipeLineExpr {
     pub pipeline: Vec<CompoundList>,
     pub capture_out: Option<Rc<RefCell<String>>>,
     pub file_redirect: Option<RedirectExpr>,
+    pub pipe_in: Option<Rc<RefCell<(PipeReader, PipeWriter)>>>,
     pub background: bool,
     pub state: Rc<RefCell<State>>,
 }
@@ -339,7 +340,13 @@ pub struct WhileExpr {
 }
 
 impl WhileExpr {
-    pub fn eval(&mut self) -> Result<i32, String> {
+    pub fn eval(
+        &mut self,
+        input: Option<Rc<RefCell<(PipeReader, PipeWriter)>>>,
+    ) -> Result<i32, String> {
+        if let Some(pipe_in) = input {
+            self.condition.pipe_in(pipe_in);
+        }
         while self.condition.eval()? == 0 {
             for command in &mut self.body {
                 command.eval()?;
@@ -405,6 +412,11 @@ pub enum AndOrNode {
 }
 
 impl AndOrNode {
+    pub fn pipe_in(&mut self, pipe: Rc<RefCell<(PipeReader, PipeWriter)>>) {
+        if let AndOrNode::Pipeline(node) = self {
+            node.pipe_in = Some(pipe)
+        };
+    }
     pub fn eval(&mut self) -> Result<i32, String> {
         match self {
             AndOrNode::Pipeline(pl) => pl.eval(),
@@ -588,18 +600,18 @@ impl SlushJob {
 impl PipeLineExpr {
     fn assemble_pipeline(&mut self) -> Result<Vec<SlushJob>, String> {
         let mut jobs: Vec<SlushJob> = Vec::new();
-        let mut pipes: Vec<(PipeReader, PipeWriter)> = Vec::new();
+        let mut pipes: Vec<Rc<RefCell<(PipeReader, PipeWriter)>>> = Vec::new();
         let sz = self.pipeline.len();
         for _ in 0..sz {
             pipes.push(match pipe() {
-                Ok((reader, writer)) => (reader, writer),
+                Ok((reader, writer)) => Rc::from(RefCell::new((reader, writer))),
                 Err(e) => return Err(format!("Error creating pipe for pipeline: {e}")),
             });
         }
         for (i, expr) in self.pipeline.iter_mut().enumerate() {
             match expr {
                 CompoundList::Ifexpr(ifxpr) => ifxpr.eval()?,
-                CompoundList::Whileexpr(whlexpr) => whlexpr.eval()?,
+                CompoundList::Whileexpr(whlexpr) => whlexpr.eval(None)?,
                 CompoundList::Forexpr(forexpr) => forexpr.eval(&self.state.clone())?,
                 CompoundList::Functionexpr(func) => func.eval(&self.state.clone()),
                 CompoundList::CommandBlock(block) => {
@@ -622,13 +634,26 @@ impl PipeLineExpr {
 
                     let base_command = exp.command.eval(&self.state.clone());
                     let mut input_pipe = None;
-                    if i > 0 {
-                        let (inp, _) = pipes.get(i).unwrap();
-                        input_pipe = Some(inp.try_clone().expect("Error cloning pipe"));
+                    if i > 0
+                        && let Some(pipeline) = pipes.get_mut(i)
+                    {
+                        input_pipe = Some(
+                            pipeline
+                                .borrow_mut()
+                                .0
+                                .try_clone()
+                                .expect("Error cloning pipe"),
+                        );
                     }
                     let output_pipe: Option<PipeWriter>;
-                    if let Some((_, outp)) = pipes.get(i + 1) {
-                        output_pipe = Some(outp.try_clone().expect("Error cloning pipe"));
+                    if let Some(pipeline) = pipes.get_mut(i + 1) {
+                        output_pipe = Some(
+                            pipeline
+                                .borrow_mut()
+                                .1
+                                .try_clone()
+                                .expect("Error cloning pipe"),
+                        );
                     } else if self.capture_out.is_some() {
                         output_pipe = match pipe() {
                             Ok((_, out)) => Some(out),

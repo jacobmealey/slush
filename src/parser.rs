@@ -162,6 +162,7 @@ impl Parser {
             capture_out: None,
             file_redirect,
             background,
+            pipe_in: None,
             state: self.state.clone(),
         })
     }
@@ -731,6 +732,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -754,6 +756,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -783,6 +786,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -833,6 +837,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -867,6 +872,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
+                pipe_in: None,
                 state: expr::State::new(),
             })),
             AndOrNode::Pipeline(Box::new(PipeLineExpr {
@@ -878,6 +884,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
+                pipe_in: None,
                 state: expr::State::new(),
             })),
         ]);
@@ -903,6 +910,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
+                pipe_in: None,
                 state: expr::State::new(),
             })),
             right: AndOrNode::Pipeline(Box::new(PipeLineExpr {
@@ -914,6 +922,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
+                pipe_in: None,
                 state: expr::State::new(),
             })),
         }))]);
@@ -941,6 +950,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -967,6 +977,7 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    pipe_in: None,
                     state: expr::State::new(),
                 },
                 if_branch: Vec::from([PipeLineExpr {
@@ -978,6 +989,7 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    pipe_in: None,
                     state: expr::State::new(),
                 }]),
                 else_branch: None,
@@ -985,6 +997,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1014,6 +1027,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1043,6 +1057,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1072,6 +1087,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1117,6 +1133,7 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    pipe_in: None,
                     state: expr::State::new(),
                 },
                 if_branch: Vec::from([PipeLineExpr {
@@ -1128,6 +1145,7 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    pipe_in: None,
                     state: expr::State::new(),
                 }]),
                 else_branch: Some(IfBranch::Else(Vec::from([PipeLineExpr {
@@ -1139,12 +1157,14 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    pipe_in: None,
                     state: expr::State::new(),
                 }]))),
             })]),
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1174,6 +1194,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1201,6 +1222,7 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    pipe_in: None,
                     state: expr::State::new(),
                 },
                 if_branch: Vec::from([PipeLineExpr {
@@ -1212,6 +1234,7 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    pipe_in: None,
                     state: expr::State::new(),
                 }]),
                 else_branch: Some(expr::IfBranch::Elif(Box::new(IfExpr {
@@ -1224,6 +1247,7 @@ mod test {
                         capture_out: None,
                         file_redirect: None,
                         background: false,
+                        pipe_in: None,
                         state: expr::State::new(),
                     },
                     if_branch: Vec::from([PipeLineExpr {
@@ -1235,6 +1259,7 @@ mod test {
                         capture_out: None,
                         file_redirect: None,
                         background: false,
+                        pipe_in: None,
                         state: expr::State::new(),
                     }]),
                     else_branch: Some(IfBranch::Else(Vec::from([PipeLineExpr {
@@ -1246,6 +1271,7 @@ mod test {
                         capture_out: None,
                         file_redirect: None,
                         background: false,
+                        pipe_in: None,
                         state: expr::State::new(),
                     }]))),
                 }))),
@@ -1253,6 +1279,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1283,6 +1310,7 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    pipe_in: None,
                     state: expr::State::new(),
                 },
                 if_branch: Vec::from([PipeLineExpr {
@@ -1294,6 +1322,7 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    pipe_in: None,
                     state: expr::State::new(),
                 }]),
                 else_branch: Some(IfBranch::Elif(Box::new(IfExpr {
@@ -1306,6 +1335,7 @@ mod test {
                         capture_out: None,
                         file_redirect: None,
                         background: false,
+                        pipe_in: None,
                         state: expr::State::new(),
                     },
                     if_branch: Vec::from([PipeLineExpr {
@@ -1317,6 +1347,7 @@ mod test {
                         capture_out: None,
                         file_redirect: None,
                         background: false,
+                        pipe_in: None,
                         state: expr::State::new(),
                     }]),
                     else_branch: None,
@@ -1325,6 +1356,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1355,6 +1387,7 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    pipe_in: None,
                     state: expr::State::new(),
                 })),
                 body: Vec::from([PipeLineExpr {
@@ -1366,12 +1399,14 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    pipe_in: None,
                     state: expr::State::new(),
                 }]),
             })]),
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1399,6 +1434,7 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    pipe_in: None,
                     state: expr::State::new(),
                 })),
                 body: Vec::from([PipeLineExpr {
@@ -1410,12 +1446,14 @@ mod test {
                     capture_out: None,
                     file_redirect: None,
                     background: false,
+                    pipe_in: None,
                     state: expr::State::new(),
                 }]),
             })]),
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1442,6 +1480,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
+                pipe_in: None,
                 state: expr::State::new(),
             })),
             AndOrNode::Pipeline(Box::new(PipeLineExpr {
@@ -1453,6 +1492,7 @@ mod test {
                 capture_out: None,
                 file_redirect: None,
                 background: false,
+                pipe_in: None,
                 state: expr::State::new(),
             })),
         ]);
@@ -1485,6 +1525,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1517,6 +1558,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1550,6 +1592,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1581,6 +1624,7 @@ mod test {
             capture_out: None,
             file_redirect: None,
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1610,6 +1654,7 @@ mod test {
                 file_descriptor: 1,
             }),
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
@@ -1640,6 +1685,7 @@ mod test {
                 file_descriptor: 1,
             }),
             background: false,
+            pipe_in: None,
             state: expr::State::new(),
         }))]);
         parser.parse(&line);
